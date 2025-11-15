@@ -72,6 +72,33 @@ const TIPOS_RECORDATORIO = {
 };
 
 export default function CarreraTracker() {
+    const [debugInfo, setDebugInfo] = useState({
+        version: '1.0.0',
+        lastUpdate: new Date().toISOString(),
+        firebaseConfig: 'CONFIGURADO',
+        buildId: `build-${Date.now()}`
+    });
+    useEffect(() => {
+        console.log('🚀 ===== DEBUG INFO =====');
+        console.log('🕐 Hora actual:', new Date().toLocaleString());
+        console.log('📦 Build ID:', debugInfo.buildId);
+        console.log('🔥 Firebase configurado:', firebaseConfig.projectId);
+        console.log('📊 Colección:', COLECCION_PRINCIPAL);
+        console.log('🔄 Componente montado - VERSION ACTUALIZADA');
+        console.log('========================');
+
+        // Verificar conexión a Firebase
+        const verificarFirebase = async () => {
+            try {
+                const testRef = collection(db, COLECCION_PRINCIPAL, 'principal', 'debug');
+                console.log('✅ Firebase connection: OK');
+            } catch (error) {
+                console.error('❌ Firebase connection: FAILED', error);
+            }
+        };
+        verificarFirebase();
+    }, []);
+
     const [pestanaActiva, setPestanaActiva] = useState('materias');
     const [materias, setMaterias] = useState([]);
     const [planExamenes, setPlanExamenes] = useState([]);
