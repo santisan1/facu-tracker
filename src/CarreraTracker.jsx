@@ -100,7 +100,7 @@ export default function CarreraTracker() {
         firebaseConfig: 'CONFIGURADO',
         buildId: `build-${Date.now()}`
     });
-
+    const stats = getEstadisticas();
     const getEstadisticas = () => {
         const total = materias.length;
         const promocionadas = materias.filter(m => m.estado === ESTADOS.PROMOCION).length;
@@ -461,7 +461,7 @@ export default function CarreraTracker() {
         return recordatoriosProximos;
     };
 
-    const stats = getEstadisticas();
+
     const materiasParaExamen = materias.filter(m =>
         m.estado === ESTADOS.REGULAR || m.estado === ESTADOS.LIBRE || m.estado === ESTADOS.CURSANDO
     );
@@ -485,6 +485,9 @@ export default function CarreraTracker() {
             </div>
         );
     }
+
+
+
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
