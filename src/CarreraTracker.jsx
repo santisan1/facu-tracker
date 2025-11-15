@@ -8,7 +8,7 @@ import {
 // Firebase
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, onSnapshot, getDoc, updateDoc } from 'firebase/firestore';
 
 const firebaseConfig = {
     apiKey: "AIzaSyCRBvf7gcn5xAbEeL90-M9umK1_FI0A_I4",
@@ -23,14 +23,12 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-auth.tenantId = null; // Agrega esta línea
-const COLECCION_PRINCIPAL = "datos_carrera";
+auth.tenantId = null;
+
 // FORZAR UID FIJO PARA USUARIOS ANÓNIMOS
 const UID_FIJO = "GeQyTcbhkZSjyX1aw2rjoZ06UoR2";
 const userUID = "GeQyTcbhkZSjyX1aw2rjoZ06UoR2";
 
-console.log("UID:", userUID);
-console.log("Firestore db:", db);
 const ESTADOS = {
     NO_CURSADA: 'No Cursada',
     CURSANDO: 'Cursando',
@@ -57,281 +55,72 @@ const MESAS_EXAMENES = {
 };
 
 const FECHAS_MESAS = {
-    [MESAS_EXAMENES.DICIEMBRE_1]: '2025-12-10',  // Cambiar a 2025
-    [MESAS_EXAMENES.DICIEMBRE_2]: '2025-12-20',  // Cambiar a 2025
-    [MESAS_EXAMENES.FEBRERO_1]: '2026-02-05',    // Ya está en 2025
-    [MESAS_EXAMENES.FEBRERO_2]: '2026-02-15',    // Ya está en 2025
-    [MESAS_EXAMENES.JUNIO_1]: '2026-07-1',      // Ya está en 2025
-    [MESAS_EXAMENES.JUNIO_2]: '2026-07-10'       // Ya está en 2025
+    [MESAS_EXAMENES.DICIEMBRE_1]: '2025-12-10',
+    [MESAS_EXAMENES.DICIEMBRE_2]: '2025-12-20',
+    [MESAS_EXAMENES.FEBRERO_1]: '2026-02-05',
+    [MESAS_EXAMENES.FEBRERO_2]: '2026-02-15',
+    [MESAS_EXAMENES.JUNIO_1]: '2026-07-01',
+    [MESAS_EXAMENES.JUNIO_2]: '2026-07-10'
 };
 
-// 🎯 NUEVAS FUNCIONALIDADES - SISTEMA DE METAS Y RECORDATORIOS
 const TIPOS_RECORDATORIO = {
     PARCIAL: 'Parcial',
     FINAL: 'Final',
     ENTREGA: 'Entrega',
     ESTUDIO: 'Sesión de Estudio'
-}; const cargarDatos = async () => {
+};
+
+// 🆕 FUNCIÓN PARA OBTENER DATOS DE FIRESTORE
+const obtenerDatosFirestore = async (documento) => {
     try {
-        // Cargar materias desde el DOCUMENTO (no colección)
-        const unsubscribeMaterias = onSnapshot(
-            doc(db, "users", userUID, "materias"), // Cambio importante: doc en lugar de collection
-            (docSnapshot) => {
-                if (docSnapshot.exists()) {
-                    const data = docSnapshot.data();
-                    // Asumiendo que las materias están en un array dentro del documento
-                    const materiasData = data.materias || data.lista || [];
-                    setMaterias(materiasData);
-                    console.log("📚 Materias cargadas:", materiasData);
-                } else {
-                    console.log("No se encontró el documento de materias");
-                    setMaterias([]);
+        const docRef = doc(db, "users", userUID, documento);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            console.log(`📄 Datos de ${documento}:`, data);
+
+            // Buscar el array que contiene los datos (puede llamarse de diferentes formas)
+            if (data.materias) return data.materias;
+            if (data.examenes) return data.examenes;
+            if (data.recordatorios) return data.recordatorios;
+            if (data.metas) return data.metas;
+            if (data.lista) return data.lista;
+
+            // Si no encuentra arrays específicos, devolver el primer array que encuentre
+            for (const key in data) {
+                if (Array.isArray(data[key])) {
+                    return data[key];
                 }
             }
-        );
 
-        // Cargar exámenes desde el DOCUMENTO
-        const unsubscribeExamenes = onSnapshot(
-            doc(db, "users", userUID, "examenes"),
-            (docSnapshot) => {
-                if (docSnapshot.exists()) {
-                    const data = docSnapshot.data();
-                    const examenesData = data.examenes || data.lista || [];
-                    setPlanExamenes(examenesData);
-                } else {
-                    setPlanExamenes([]);
-                }
-            }
-        );
-
-        // Para recordatorios y metas, si no existen los documentos, los creamos vacíos
-        const unsubscribeRecordatorios = onSnapshot(
-            doc(db, "users", userUID, "recordatorios"),
-            (docSnapshot) => {
-                if (docSnapshot.exists()) {
-                    const data = docSnapshot.data();
-                    const recordatoriosData = data.recordatorios || data.lista || [];
-                    setRecordatorios(recordatoriosData);
-                } else {
-                    setRecordatorios([]);
-                }
-            }
-        );
-
-        const unsubscribeMetas = onSnapshot(
-            doc(db, "users", userUID, "metas"),
-            (docSnapshot) => {
-                if (docSnapshot.exists()) {
-                    const data = docSnapshot.data();
-                    const metasData = data.metas || data.lista || [];
-                    setMetas(metasData);
-                } else {
-                    setMetas([]);
-                }
-            }
-        );
-
-        setCargando(false);
-
-        return () => {
-            unsubscribeMaterias();
-            unsubscribeExamenes();
-            unsubscribeRecordatorios();
-            unsubscribeMetas();
-        };
-    } catch (error) {
-        console.error('Error cargando datos:', error);
-        setCargando(false);
-    }
-};
-
-// Y actualizamos TODAS las funciones de escritura:
-
-const agregarMateria = async () => {
-    if (nuevaMateria.nombre.trim()) {
-        const nuevaMateriaConId = {
-            ...nuevaMateria,
-            id: Date.now().toString(),
-            fechaCreacion: new Date().toISOString()
-        };
-
-        try {
-            // Primero, obtenemos el documento actual de materias
-            const materiasDocRef = doc(db, "users", userUID, "materias");
-            const materiasDoc = await getDoc(materiasDocRef);
-
-            let nuevasMaterias = [];
-            if (materiasDoc.exists()) {
-                const data = materiasDoc.data();
-                nuevasMaterias = data.materias || data.lista || [];
-            }
-
-            // Agregamos la nueva materia
-            nuevasMaterias.push(nuevaMateriaConId);
-
-            // Actualizamos el documento
-            await setDoc(materiasDocRef, {
-                materias: nuevasMaterias,
-                ultimaActualizacion: new Date().toISOString()
-            });
-
-            setNuevaMateria({
-                nombre: '',
-                anio: 1,
-                cuatrimestre: 1,
-                estado: ESTADOS.NO_CURSADA,
-                correlativas: [],
-                notaFinal: null,
-                notasParciales: []
-            });
-            setMostrandoFormulario(false);
-        } catch (error) {
-            console.error('Error agregando materia:', error);
+            return [];
+        } else {
+            console.log(`❌ Documento ${documento} no existe`);
+            return [];
         }
+    } catch (error) {
+        console.error(`Error obteniendo ${documento}:`, error);
+        return [];
     }
 };
 
-const actualizarMateria = async (id, cambios) => {
+// 🆕 FUNCIÓN PARA GUARDAR DATOS EN FIRESTORE
+const guardarDatosFirestore = async (documento, datos) => {
     try {
-        const materiasDocRef = doc(db, "users", userUID, "materias");
-        const materiasDoc = await getDoc(materiasDocRef);
-
-        if (materiasDoc.exists()) {
-            const data = materiasDoc.data();
-            let materiasData = data.materias || data.lista || [];
-
-            // Actualizamos la materia específica
-            materiasData = materiasData.map(materia =>
-                materia.id === id ? { ...materia, ...cambios } : materia
-            );
-
-            await setDoc(materiasDocRef, {
-                materias: materiasData,
-                ultimaActualizacion: new Date().toISOString()
-            });
-        }
+        const docRef = doc(db, "users", userUID, documento);
+        await setDoc(docRef, {
+            [documento]: datos,
+            ultimaActualizacion: new Date().toISOString()
+        });
+        console.log(`✅ Datos guardados en ${documento}`);
+        return true;
     } catch (error) {
-        console.error('Error actualizando materia:', error);
+        console.error(`Error guardando ${documento}:`, error);
+        return false;
     }
 };
 
-const eliminarMateria = async (id) => {
-    try {
-        const materiasDocRef = doc(db, "users", userUID, "materias");
-        const materiasDoc = await getDoc(materiasDocRef);
-
-        if (materiasDoc.exists()) {
-            const data = materiasDoc.data();
-            let materiasData = data.materias || data.lista || [];
-
-            // Filtramos la materia a eliminar
-            materiasData = materiasData.filter(materia => materia.id !== id);
-
-            await setDoc(materiasDocRef, {
-                materias: materiasData,
-                ultimaActualizacion: new Date().toISOString()
-            });
-
-            // También eliminamos los exámenes asociados
-            const examenesDocRef = doc(db, "users", userUID, "examenes");
-            const examenesDoc = await getDoc(examenesDocRef);
-
-            if (examenesDoc.exists()) {
-                const examenesData = examenesDoc.data().examenes || examenesDoc.data().lista || [];
-                const nuevosExamenes = examenesData.filter(examen => examen.materiaId !== id);
-                await setDoc(examenesDocRef, {
-                    examenes: nuevosExamenes,
-                    ultimaActualizacion: new Date().toISOString()
-                });
-            }
-        }
-    } catch (error) {
-        console.error('Error eliminando materia:', error);
-    }
-};
-
-// Hacer lo mismo para las demás funciones...
-
-const agregarExamen = async (materiaId, mesa) => {
-    const yaAgregado = planExamenes.find(p => p.materiaId === materiaId && p.mesa === mesa);
-    if (!yaAgregado) {
-        const nuevoExamen = {
-            id: Date.now().toString(),
-            materiaId,
-            mesa,
-            fechaMesa: FECHAS_MESAS[mesa]
-        };
-
-        try {
-            const examenesDocRef = doc(db, "users", userUID, "examenes");
-            const examenesDoc = await getDoc(examenesDocRef);
-
-            let nuevosExamenes = [];
-            if (examenesDoc.exists()) {
-                const data = examenesDoc.data();
-                nuevosExamenes = data.examenes || data.lista || [];
-            }
-
-            nuevosExamenes.push(nuevoExamen);
-
-            await setDoc(examenesDocRef, {
-                examenes: nuevosExamenes,
-                ultimaActualizacion: new Date().toISOString()
-            });
-        } catch (error) {
-            console.error('Error agregando examen:', error);
-        }
-    }
-};
-
-const eliminarExamen = async (id) => {
-    try {
-        const examenesDocRef = doc(db, "users", userUID, "examenes");
-        const examenesDoc = await getDoc(examenesDocRef);
-
-        if (examenesDoc.exists()) {
-            const data = examenesDoc.data();
-            let examenesData = data.examenes || data.lista || [];
-
-            examenesData = examenesData.filter(examen => examen.id !== id);
-
-            await setDoc(examenesDocRef, {
-                examenes: examenesData,
-                ultimaActualizacion: new Date().toISOString()
-            });
-        }
-    } catch (error) {
-        console.error('Error eliminando examen:', error);
-    }
-};
-
-// Y funciones similares para recordatorios y metas...
-const debugEstructura = async () => {
-    try {
-        console.log("🔍 Debug de estructura Firestore:");
-
-        const materiasDoc = await getDoc(doc(db, "users", userUID, "materias"));
-        console.log("Documento 'materias':", materiasDoc.exists());
-        if (materiasDoc.exists()) {
-            console.log("Contenido:", materiasDoc.data());
-        }
-
-        const examenesDoc = await getDoc(doc(db, "users", userUID, "examenes"));
-        console.log("Documento 'examenes':", examenesDoc.exists());
-        if (examenesDoc.exists()) {
-            console.log("Contenido:", examenesDoc.data());
-        }
-
-    } catch (error) {
-        console.error("Error en debug:", error);
-    }
-};
-
-// Llama esta función después de cargarDatos
-useEffect(() => {
-    cargarDatos();
-    debugEstructura();
-}, []);
 export default function CarreraTracker() {
     const [debugInfo, setDebugInfo] = useState({
         version: '1.0.0',
@@ -339,107 +128,6 @@ export default function CarreraTracker() {
         firebaseConfig: 'CONFIGURADO',
         buildId: `build-${Date.now()}`
     });
-    const stats = getEstadisticas();
-    const getEstadisticas = () => {
-        const total = materias.length;
-        const promocionadas = materias.filter(m => m.estado === ESTADOS.PROMOCION).length;
-        const regulares = materias.filter(m => m.estado === ESTADOS.REGULAR).length;
-        const cursando = materias.filter(m => m.estado === ESTADOS.CURSANDO).length;
-        const libres = materias.filter(m => m.estado === ESTADOS.LIBRE).length;
-        const noCursadas = materias.filter(m => m.estado === ESTADOS.NO_CURSADA).length;
-
-        // 🆕 AGREGAR LA FUNCIÓN puedeCursar QUE TAMBIÉN FALTA
-        const puedeCursar = (materia) => {
-            if (materia.estado !== ESTADOS.NO_CURSADA) return false;
-            if (materia.correlativas.length === 0) return true;
-
-            return materia.correlativas.every(corrId => {
-                const correlativa = materias.find(m => m.id === corrId);
-                return correlativa && (correlativa.estado === ESTADOS.REGULAR || correlativa.estado === ESTADOS.PROMOCION);
-            });
-        };
-
-        const disponibles = materias.filter(m => puedeCursar(m)).length;
-
-        const porcentajeCompletado = total > 0 ? ((promocionadas + regulares) / total * 100).toFixed(1) : 0;
-
-        // 🆕 AGREGAR calcularPromedioGeneral QUE TAMBIÉN FALTA
-        const calcularPromedioGeneral = () => {
-            const materiasConNota = materias.filter(m => m.notaFinal !== null && m.notaFinal !== undefined);
-            if (materiasConNota.length === 0) return null;
-
-            const suma = materiasConNota.reduce((acc, materia) => acc + materia.notaFinal, 0);
-            return (suma / materiasConNota.length).toFixed(2);
-        };
-
-        const promedioGeneral = calcularPromedioGeneral();
-
-        return {
-            total,
-            promocionadas,
-            regulares,
-            cursando,
-            libres,
-            noCursadas,
-            disponibles,
-            porcentajeCompletado,
-            promedioGeneral
-        };
-    };
-
-    // 🆕 AGREGA ESTA FUNCIÓN TAMBIÉN
-    const puedeCursar = (materia) => {
-        if (materia.estado !== ESTADOS.NO_CURSADA) return false;
-        if (materia.correlativas.length === 0) return true;
-
-        return materia.correlativas.every(corrId => {
-            const correlativa = materias.find(m => m.id === corrId);
-            return correlativa && (correlativa.estado === ESTADOS.REGULAR || correlativa.estado === ESTADOS.PROMOCION);
-        });
-    };
-
-    // 🆕 AGREGA ESTA FUNCIÓN TAMBIÉN
-    const agregarNotaParcial = async (materiaId, nota) => {
-        if (nota >= 0 && nota <= 10) {
-            const materia = materias.find(m => m.id === materiaId);
-            const nuevasNotas = [...(materia.notasParciales || []), {
-                nota,
-                fecha: new Date().toISOString(),
-                id: Date.now().toString()
-            }];
-
-            await actualizarMateria(materiaId, {
-                notasParciales: nuevasNotas,
-                estado: ESTADOS.CURSANDO
-            });
-        }
-    };
-
-    // 🆕 AGREGA ESTA FUNCIÓN TAMBIÉN
-    const calcularPromedioMateria = (materia) => {
-        if (!materia.notasParciales || materia.notasParciales.length === 0) return null;
-        const suma = materia.notasParciales.reduce((acc, curr) => acc + curr.nota, 0);
-        return (suma / materia.notasParciales.length).toFixed(2);
-    };
-    // 🆕 AGREGA ESTA FUNCIÓN DESPUÉS DE eliminarExamen
-    const marcarComoPromovida = async (materiaId, examenId, nota = null) => {
-        await actualizarMateria(materiaId, {
-            estado: ESTADOS.PROMOCION,
-            notaFinal: nota
-        });
-        await eliminarExamen(examenId);
-    };
-    // Verificar conexión a Firebase
-    const verificarFirebase = async () => {
-        try {
-            const testRef = collection(db, COLECCION_PRINCIPAL, 'principal', 'debug');
-            console.log('✅ Firebase connection: OK');
-        } catch (error) {
-            console.error('❌ Firebase connection: FAILED', error);
-        }
-    };
-    verificarFirebase();
-
 
     const [pestanaActiva, setPestanaActiva] = useState('materias');
     const [materias, setMaterias] = useState([]);
@@ -459,76 +147,93 @@ export default function CarreraTracker() {
     const [mostrandoFormulario, setMostrandoFormulario] = useState(false);
     const [cargando, setCargando] = useState(true);
 
-    useEffect(() => {
-        cargarDatos();
-    }, []);
+    // 🆕 FUNCIONES AUXILIARES
+    const puedeCursar = (materia) => {
+        if (materia.estado !== ESTADOS.NO_CURSADA) return false;
+        if (materia.correlativas.length === 0) return true;
 
+        return materia.correlativas.every(corrId => {
+            const correlativa = materias.find(m => m.id === corrId);
+            return correlativa && (correlativa.estado === ESTADOS.REGULAR || correlativa.estado === ESTADOS.PROMOCION);
+        });
+    };
+
+    const calcularPromedioMateria = (materia) => {
+        if (!materia.notasParciales || materia.notasParciales.length === 0) return null;
+        const suma = materia.notasParciales.reduce((acc, curr) => acc + curr.nota, 0);
+        return (suma / materia.notasParciales.length).toFixed(2);
+    };
+
+    const getEstadisticas = () => {
+        const total = materias.length;
+        const promocionadas = materias.filter(m => m.estado === ESTADOS.PROMOCION).length;
+        const regulares = materias.filter(m => m.estado === ESTADOS.REGULAR).length;
+        const cursando = materias.filter(m => m.estado === ESTADOS.CURSANDO).length;
+        const libres = materias.filter(m => m.estado === ESTADOS.LIBRE).length;
+        const noCursadas = materias.filter(m => m.estado === ESTADOS.NO_CURSADA).length;
+        const disponibles = materias.filter(m => puedeCursar(m)).length;
+
+        const porcentajeCompletado = total > 0 ? ((promocionadas + regulares) / total * 100).toFixed(1) : 0;
+
+        const calcularPromedioGeneral = () => {
+            const materiasConNota = materias.filter(m => m.notaFinal !== null && m.notaFinal !== undefined);
+            if (materiasConNota.length === 0) return null;
+            const suma = materiasConNota.reduce((acc, materia) => acc + materia.notaFinal, 0);
+            return (suma / materiasConNota.length).toFixed(2);
+        };
+
+        const promedioGeneral = calcularPromedioGeneral();
+
+        return {
+            total,
+            promocionadas,
+            regulares,
+            cursando,
+            libres,
+            noCursadas,
+            disponibles,
+            porcentajeCompletado,
+            promedioGeneral
+        };
+    };
+
+    // 🆕 CARGAR DATOS DESDE FIRESTORE
     const cargarDatos = async () => {
         try {
-            // Cargar materias
-            const unsubscribeMaterias = onSnapshot(
-                collection(db, COLECCION_PRINCIPAL, 'principal', 'materias'),
-                (snapshot) => {
-                    const materiasData = snapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data()
-                    }));
-                    setMaterias(materiasData);
-                }
-            );
+            console.log("🔄 Cargando datos desde Firestore...");
 
-            // Cargar exámenes
-            const unsubscribeExamenes = onSnapshot(
-                collection(db, COLECCION_PRINCIPAL, 'principal', 'examenes'),
-                (snapshot) => {
-                    const examenesData = snapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data()
-                    }));
-                    setPlanExamenes(examenesData);
-                }
-            );
+            const [
+                materiasData,
+                examenesData,
+                recordatoriosData,
+                metasData
+            ] = await Promise.all([
+                obtenerDatosFirestore("materias"),
+                obtenerDatosFirestore("examenes"),
+                obtenerDatosFirestore("recordatorios"),
+                obtenerDatosFirestore("metas")
+            ]);
 
-            // Cargar recordatorios
-            const unsubscribeRecordatorios = onSnapshot(
-                collection(db, COLECCION_PRINCIPAL, 'principal', 'recordatorios'),
-                (snapshot) => {
-                    const recordatoriosData = snapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data()
-                    }));
-                    setRecordatorios(recordatoriosData);
-                }
-            );
+            setMaterias(materiasData);
+            setPlanExamenes(examenesData);
+            setRecordatorios(recordatoriosData);
+            setMetas(metasData);
 
-            // Cargar metas
-            const unsubscribeMetas = onSnapshot(
-                collection(db, COLECCION_PRINCIPAL, 'principal', 'metas'),
-                (snapshot) => {
-                    const metasData = snapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data()
-                    }));
-                    setMetas(metasData);
-                }
-            );
+            console.log("✅ Datos cargados:", {
+                materias: materiasData.length,
+                examenes: examenesData.length,
+                recordatorios: recordatoriosData.length,
+                metas: metasData.length
+            });
 
             setCargando(false);
-
-            return () => {
-                unsubscribeMaterias();
-                unsubscribeExamenes();
-                unsubscribeRecordatorios();
-                unsubscribeMetas();
-            };
         } catch (error) {
-            console.error('Error cargando datos:', error);
+            console.error('❌ Error cargando datos:', error);
             setCargando(false);
         }
     };
 
-    // 🔄 MODIFICAR TODAS LAS FUNCIONES DE FIREBASE
-
+    // 🆕 FUNCIONES CRUD PARA MATERIAS
     const agregarMateria = async () => {
         if (nuevaMateria.nombre.trim()) {
             const nuevaMateriaConId = {
@@ -537,12 +242,11 @@ export default function CarreraTracker() {
                 fechaCreacion: new Date().toISOString()
             };
 
-            try {
-                await setDoc(
-                    doc(db, COLECCION_PRINCIPAL, 'principal', 'materias', nuevaMateriaConId.id),
-                    nuevaMateriaConId
-                );
+            const nuevasMaterias = [...materias, nuevaMateriaConId];
+            const exito = await guardarDatosFirestore("materias", nuevasMaterias);
 
+            if (exito) {
+                setMaterias(nuevasMaterias);
                 setNuevaMateria({
                     nombre: '',
                     anio: 1,
@@ -553,45 +257,52 @@ export default function CarreraTracker() {
                     notasParciales: []
                 });
                 setMostrandoFormulario(false);
-            } catch (error) {
-                console.error('Error agregando materia:', error);
             }
         }
     };
 
     const actualizarMateria = async (id, cambios) => {
-        try {
-            await setDoc(
-                doc(db, COLECCION_PRINCIPAL, 'principal', 'materias', id),
-                { ...cambios },
-                { merge: true }
-            );
-        } catch (error) {
-            console.error('Error actualizando materia:', error);
+        const nuevasMaterias = materias.map(materia =>
+            materia.id === id ? { ...materia, ...cambios } : materia
+        );
+
+        const exito = await guardarDatosFirestore("materias", nuevasMaterias);
+        if (exito) {
+            setMaterias(nuevasMaterias);
         }
     };
 
     const eliminarMateria = async (id) => {
-        try {
-            await deleteDoc(doc(db, COLECCION_PRINCIPAL, 'principal', 'materias', id));
+        const nuevasMaterias = materias.filter(m => m.id !== id);
+        const exito = await guardarDatosFirestore("materias", nuevasMaterias);
 
-            // Eliminar correlativas y exámenes relacionados
-            const materiasConCorrelativas = materias.filter(m => m.correlativas.includes(id));
-            for (const materia of materiasConCorrelativas) {
-                await actualizarMateria(materia.id, {
-                    correlativas: materia.correlativas.filter(c => c !== id)
-                });
-            }
+        if (exito) {
+            setMaterias(nuevasMaterias);
 
-            const examenesAEliminar = planExamenes.filter(p => p.materiaId === id);
-            for (const examen of examenesAEliminar) {
-                await deleteDoc(doc(db, COLECCION_PRINCIPAL, 'principal', 'examenes', examen.id));
-            }
-        } catch (error) {
-            console.error('Error eliminando materia:', error);
+            // Eliminar exámenes relacionados
+            const nuevosExamenes = planExamenes.filter(p => p.materiaId !== id);
+            await guardarDatosFirestore("examenes", nuevosExamenes);
+            setPlanExamenes(nuevosExamenes);
         }
     };
 
+    const agregarNotaParcial = async (materiaId, nota) => {
+        if (nota >= 0 && nota <= 10) {
+            const materia = materias.find(m => m.id === materiaId);
+            const nuevasNotas = [...(materia.notasParciales || []), {
+                nota,
+                fecha: new Date().toISOString(),
+                id: Date.now().toString()
+            }];
+
+            await actualizarMateria(materiaId, {
+                notasParciales: nuevasNotas,
+                estado: ESTADOS.CURSANDO
+            });
+        }
+    };
+
+    // 🆕 FUNCIONES CRUD PARA EXÁMENES
     const agregarExamen = async (materiaId, mesa) => {
         const yaAgregado = planExamenes.find(p => p.materiaId === materiaId && p.mesa === mesa);
         if (!yaAgregado) {
@@ -602,26 +313,33 @@ export default function CarreraTracker() {
                 fechaMesa: FECHAS_MESAS[mesa]
             };
 
-            try {
-                await setDoc(
-                    doc(db, COLECCION_PRINCIPAL, 'principal', 'examenes', nuevoExamen.id),
-                    nuevoExamen
-                );
-            } catch (error) {
-                console.error('Error agregando examen:', error);
+            const nuevosExamenes = [...planExamenes, nuevoExamen];
+            const exito = await guardarDatosFirestore("examenes", nuevosExamenes);
+
+            if (exito) {
+                setPlanExamenes(nuevosExamenes);
             }
         }
     };
 
     const eliminarExamen = async (id) => {
-        try {
-            await deleteDoc(doc(db, COLECCION_PRINCIPAL, 'principal', 'examenes', id));
-        } catch (error) {
-            console.error('Error eliminando examen:', error);
+        const nuevosExamenes = planExamenes.filter(p => p.id !== id);
+        const exito = await guardarDatosFirestore("examenes", nuevosExamenes);
+
+        if (exito) {
+            setPlanExamenes(nuevosExamenes);
         }
     };
 
-    // Hacer lo mismo para recordatorios y metas...
+    const marcarComoPromovida = async (materiaId, examenId, nota = null) => {
+        await actualizarMateria(materiaId, {
+            estado: ESTADOS.PROMOCION,
+            notaFinal: nota
+        });
+        await eliminarExamen(examenId);
+    };
+
+    // 🆕 FUNCIONES CRUD PARA RECORDATORIOS
     const agregarRecordatorio = async (recordatorio) => {
         const nuevoRecordatorio = {
             id: Date.now().toString(),
@@ -630,36 +348,35 @@ export default function CarreraTracker() {
             fechaCreacion: new Date().toISOString()
         };
 
-        try {
-            await setDoc(
-                doc(db, COLECCION_PRINCIPAL, 'principal', 'recordatorios', nuevoRecordatorio.id),
-                nuevoRecordatorio
-            );
-        } catch (error) {
-            console.error('Error agregando recordatorio:', error);
+        const nuevosRecordatorios = [...recordatorios, nuevoRecordatorio];
+        const exito = await guardarDatosFirestore("recordatorios", nuevosRecordatorios);
+
+        if (exito) {
+            setRecordatorios(nuevosRecordatorios);
         }
     };
 
     const eliminarRecordatorio = async (id) => {
-        try {
-            await deleteDoc(doc(db, COLECCION_PRINCIPAL, 'principal', 'recordatorios', id));
-        } catch (error) {
-            console.error('Error eliminando recordatorio:', error);
+        const nuevosRecordatorios = recordatorios.filter(r => r.id !== id);
+        const exito = await guardarDatosFirestore("recordatorios", nuevosRecordatorios);
+
+        if (exito) {
+            setRecordatorios(nuevosRecordatorios);
         }
     };
 
     const toggleRecordatorioCompletado = async (id, completado) => {
-        try {
-            await setDoc(
-                doc(db, COLECCION_PRINCIPAL, 'principal', 'recordatorios', id),
-                { completado },
-                { merge: true }
-            );
-        } catch (error) {
-            console.error('Error actualizando recordatorio:', error);
+        const nuevosRecordatorios = recordatorios.map(r =>
+            r.id === id ? { ...r, completado } : r
+        );
+
+        const exito = await guardarDatosFirestore("recordatorios", nuevosRecordatorios);
+        if (exito) {
+            setRecordatorios(nuevosRecordatorios);
         }
     };
 
+    // 🆕 FUNCIONES CRUD PARA METAS
     const agregarMeta = async (meta) => {
         const nuevaMeta = {
             id: Date.now().toString(),
@@ -668,28 +385,26 @@ export default function CarreraTracker() {
             fechaCreacion: new Date().toISOString()
         };
 
-        try {
-            await setDoc(
-                doc(db, COLECCION_PRINCIPAL, 'principal', 'metas', nuevaMeta.id),
-                nuevaMeta
-            );
-        } catch (error) {
-            console.error('Error agregando meta:', error);
+        const nuevasMetas = [...metas, nuevaMeta];
+        const exito = await guardarDatosFirestore("metas", nuevasMetas);
+
+        if (exito) {
+            setMetas(nuevasMetas);
         }
     };
 
     const toggleMetaCompletada = async (id, completada) => {
-        try {
-            await setDoc(
-                doc(db, COLECCION_PRINCIPAL, 'principal', 'metas', id),
-                { completada },
-                { merge: true }
-            );
-        } catch (error) {
-            console.error('Error actualizando meta:', error);
+        const nuevasMetas = metas.map(m =>
+            m.id === id ? { ...m, completada } : m
+        );
+
+        const exito = await guardarDatosFirestore("metas", nuevasMetas);
+        if (exito) {
+            setMetas(nuevasMetas);
         }
     };
-    // 📊 CALCULAR PRÓXIMOS VENCIMIENTOS
+
+    // 🆕 FUNCIONES AUXILIARES DE UI
     const getProximosVencimientos = () => {
         const hoy = new Date();
         const recordatoriosProximos = recordatorios
@@ -700,19 +415,25 @@ export default function CarreraTracker() {
         return recordatoriosProximos;
     };
 
+    // EFFECTS
+    useEffect(() => {
+        cargarDatos();
+    }, []);
 
+    // CALCULOS
+    const stats = getEstadisticas();
     const materiasParaExamen = materias.filter(m =>
         m.estado === ESTADOS.REGULAR || m.estado === ESTADOS.LIBRE || m.estado === ESTADOS.CURSANDO
     );
-
-    // DEBUG temporal
-    console.log('Materias para examen:', materiasParaExamen.map(m => ({
-        nombre: m.nombre,
-        estado: m.estado,
-        id: m.id
-    })));
-
     const proximosVencimientos = getProximosVencimientos();
+
+    // DEBUG
+    console.log('🔍 Estado actual:', {
+        materias: materias.length,
+        examenes: planExamenes.length,
+        recordatorios: recordatorios.length,
+        metas: metas.length
+    });
 
     if (cargando) {
         return (
@@ -724,9 +445,6 @@ export default function CarreraTracker() {
             </div>
         );
     }
-
-
-
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
@@ -792,7 +510,7 @@ export default function CarreraTracker() {
                     </div>
                 )}
 
-                {/* Pestañas */}
+                {/* Pestañas y contenido... (mantener el resto del JSX igual) */}
                 <div className="flex gap-2 mb-4 flex-wrap">
                     <button
                         onClick={() => setPestanaActiva('materias')}
@@ -814,37 +532,7 @@ export default function CarreraTracker() {
                         <Calendar size={18} />
                         Mesas de Exámenes
                     </button>
-                    <button
-                        onClick={() => setPestanaActiva('estadisticas')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${pestanaActiva === 'estadisticas'
-                            ? 'bg-indigo-600 text-white shadow-lg'
-                            : 'bg-white text-gray-700 hover:bg-gray-100'
-                            }`}
-                    >
-                        <BarChart3 size={18} />
-                        Estadísticas
-                    </button>
-                    <button
-                        onClick={() => setPestanaActiva('planificacion')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${pestanaActiva === 'planificacion'
-                            ? 'bg-indigo-600 text-white shadow-lg'
-                            : 'bg-white text-gray-700 hover:bg-gray-100'
-                            }`}
-                    >
-                        <CalendarDays size={18} />
-                        Planificación
-                    </button>
-
-                    <button
-                        onClick={() => setPestanaActiva('calendario')}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${pestanaActiva === 'calendario'
-                            ? 'bg-indigo-600 text-white shadow-lg'
-                            : 'bg-white text-gray-700 hover:bg-gray-100'
-                            }`}
-                    >
-                        <CalendarDays size={18} />
-                        Calendario
-                    </button>
+                    {/* ... resto de pestañas */}
                 </div>
 
                 {/* Estadísticas */}
@@ -857,82 +545,51 @@ export default function CarreraTracker() {
                         <div className="text-xl font-bold text-green-700">{stats.promocionadas}</div>
                         <div className="text-xs text-green-600">Promoción</div>
                     </div>
-                    <div className="bg-yellow-50 rounded-lg shadow p-2">
-                        <div className="text-xl font-bold text-yellow-700">{stats.regulares}</div>
-                        <div className="text-xs text-yellow-600">Regulares</div>
-                    </div>
-                    <div className="bg-blue-50 rounded-lg shadow p-2">
-                        <div className="text-xl font-bold text-blue-700">{stats.cursando}</div>
-                        <div className="text-xs text-blue-600">Cursando</div>
-                    </div>
-                    <div className="bg-red-50 rounded-lg shadow p-2">
-                        <div className="text-xl font-bold text-red-700">{stats.libres}</div>
-                        <div className="text-xs text-red-600">Libres</div>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg shadow p-2">
-                        <div className="text-xl font-bold text-gray-700">{stats.noCursadas}</div>
-                        <div className="text-xs text-gray-600">No Cursadas</div>
-                    </div>
-                    <div className="bg-purple-50 rounded-lg shadow p-2">
-                        <div className="text-xl font-bold text-purple-700">{stats.disponibles}</div>
-                        <div className="text-xs text-purple-600">Disponibles</div>
-                    </div>
-                    <div className="bg-orange-50 rounded-lg shadow p-2">
-                        <div className="text-xl font-bold text-orange-700">{stats.porcentajeCompletado}%</div>
-                        <div className="text-xs text-orange-600">Completado</div>
-                    </div>
+                    {/* ... resto de estadísticas */}
                 </div>
 
                 {/* Contenido según pestaña */}
-                {
-                    pestanaActiva === 'calendario' ? (
-                        <CalendarioPrincipal
-                            materias={materias}
-                            recordatorios={recordatorios}
-                            metas={metas}
-                            planExamenes={planExamenes} // ⬅️ IMPORTANTE agregar esta prop
-                        />
-                    ) : pestanaActiva === 'materias' ? (
-                        <VistaMaterias
-                            materias={materias}
-                            mostrandoFormulario={mostrandoFormulario}
-                            setMostrandoFormulario={setMostrandoFormulario}
-                            nuevaMateria={nuevaMateria}
-                            setNuevaMateria={setNuevaMateria}
-                            agregarMateria={agregarMateria}
-                            actualizarMateria={actualizarMateria}
-                            puedeCursar={puedeCursar} // ⬅️ AGR
-                            eliminarMateria={eliminarMateria}
-                            agregarNotaParcial={agregarNotaParcial}
-                            calcularPromedioMateria={calcularPromedioMateria}
-                        />
-                    ) : pestanaActiva === 'examenes' ? (
-                        <VistaMesasExamenes
-                            materias={materias}
-                            materiasParaExamen={materiasParaExamen}
-                            planExamenes={planExamenes}
-                            agregarExamen={agregarExamen}
-                            eliminarExamen={eliminarExamen}
-                            actualizarMateria={actualizarMateria}
-                            marcarComoPromovida={marcarComoPromovida}
-                        />
-                    ) : pestanaActiva === 'estadisticas' ? (
-                        <VistaEstadisticas
-                            stats={stats}
-                            materias={materias}
-                        />
-                    ) : (
-                        <VistaPlanificacion
-                            materias={materias}
-                            recordatorios={recordatorios}
-                            metas={metas}
-                            agregarRecordatorio={agregarRecordatorio}
-                            eliminarRecordatorio={eliminarRecordatorio}
-                            toggleRecordatorioCompletado={toggleRecordatorioCompletado}
-                            agregarMeta={agregarMeta}
-                            toggleMetaCompletada={toggleMetaCompletada}
-                        />
-                    )}
+                {pestanaActiva === 'materias' ? (
+                    <VistaMaterias
+                        materias={materias}
+                        mostrandoFormulario={mostrandoFormulario}
+                        setMostrandoFormulario={setMostrandoFormulario}
+                        nuevaMateria={nuevaMateria}
+                        setNuevaMateria={setNuevaMateria}
+                        agregarMateria={agregarMateria}
+                        actualizarMateria={actualizarMateria}
+                        puedeCursar={puedeCursar}
+                        eliminarMateria={eliminarMateria}
+                        agregarNotaParcial={agregarNotaParcial}
+                        calcularPromedioMateria={calcularPromedioMateria}
+                    />
+                ) : pestanaActiva === 'examenes' ? (
+                    <VistaMesasExamenes
+                        materias={materias}
+                        materiasParaExamen={materiasParaExamen}
+                        planExamenes={planExamenes}
+                        agregarExamen={agregarExamen}
+                        eliminarExamen={eliminarExamen}
+                        actualizarMateria={actualizarMateria}
+                        marcarComoPromovida={marcarComoPromovida}
+                    />
+                ) : pestanaActiva === 'estadisticas' ? (
+                    <VistaEstadisticas
+                        stats={stats}
+                        materias={materias}
+                    />
+                ) : (
+                    <VistaPlanificacion
+                        materias={materias}
+                        recordatorios={recordatorios}
+                        metas={metas}
+                        agregarRecordatorio={agregarRecordatorio}
+                        eliminarRecordatorio={eliminarRecordatorio}
+                        toggleRecordatorioCompletado={toggleRecordatorioCompletado}
+                        agregarMeta={agregarMeta}
+                        toggleMetaCompletada={toggleMetaCompletada}
+                    />
+                )}
             </div>
         </div>
     );
