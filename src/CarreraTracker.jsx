@@ -1530,7 +1530,7 @@ function MapaCorrelativas({ materias }) {
                                 Math.max(max, getDependientes(m.id).length), 0
                             )}
                         </div>
-                        <div className="text-sm text-orange-600">Máx. materias dependientes</div>
+                        <div className="text-sm text-orange-600">Máx. maaterias dependientes</div>
                     </div>
                     <div className="bg-purple-50 rounded-lg p-3">
                         <div className="text-2xl font-bold text-purple-700">
