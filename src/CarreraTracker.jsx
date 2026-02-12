@@ -1,13 +1,10 @@
 import React, { useState, useEffect } from 'react';
 
 import {
-
     Plus, Edit2, Trash2, Save, X, Check, Calendar, BookOpen, User, LogOut,
-
     Clock, AlertCircle, Star, Target, TrendingUp, Award, BarChart3, CheckCircle,
-
-    Bell, Settings, Download, Upload, Trophy, Clock3, CalendarDays, ChevronLeft, ChevronRight, Edit3
-
+    Bell, Settings, Download, Upload, Trophy, Clock3, CalendarDays, ChevronLeft,
+    ChevronRight, Edit3, GitBranch, ArrowRight, Circle  // ⬅️ AGREGUÉ ESTOS 3
 } from 'lucide-react';
 
 
@@ -103,17 +100,17 @@ const MESAS_EXAMENES = {
 
 const FECHAS_MESAS = {
 
-    [MESAS_EXAMENES.DICIEMBRE_1]: '2025-12-10',  // Cambiar a 2025
+    [MESAS_EXAMENES.DICIEMBRE_1]: '2025-12-1',  // Cambiar a 2025
 
-    [MESAS_EXAMENES.DICIEMBRE_2]: '2025-12-20',  // Cambiar a 2025
+    [MESAS_EXAMENES.DICIEMBRE_2]: '2025-12-15',  // Cambiar a 2025
 
-    [MESAS_EXAMENES.FEBRERO_1]: '2026-02-05',    // Ya está en 2025
+    [MESAS_EXAMENES.FEBRERO_1]: '2026-02-02',    // Ya está en 2025
 
-    [MESAS_EXAMENES.FEBRERO_2]: '2026-02-15',    // Ya está en 2025
+    [MESAS_EXAMENES.FEBRERO_2]: '2026-02-16',    // Ya está en 2025
 
-    [MESAS_EXAMENES.JUNIO_1]: '2026-07-1',      // Ya está en 2025
+    [MESAS_EXAMENES.JUNIO_1]: '2026-07-01',      // Ya está en 2025
 
-    [MESAS_EXAMENES.JUNIO_2]: '2026-07-10'       // Ya está en 2025
+    [MESAS_EXAMENES.JUNIO_2]: '2026-07-08'       // Ya está en 2025
 
 };
 
@@ -122,15 +119,10 @@ const FECHAS_MESAS = {
 // 🎯 NUEVAS FUNCIONALIDADES - SISTEMA DE METAS Y RECORDATORIOS
 
 const TIPOS_RECORDATORIO = {
-
     PARCIAL: 'Parcial',
-
     FINAL: 'Final',
-
     ENTREGA: 'Entrega',
-
     ESTUDIO: 'Sesión de Estudio'
-
 };
 
 
@@ -154,27 +146,17 @@ export default function CarreraTracker() {
     const [nuevaMateria, setNuevaMateria] = useState({
 
         nombre: '',
-
         anio: 1,
-
         cuatrimestre: 1,
-
         estado: ESTADOS.NO_CURSADA,
-
         correlativas: [],
-
         notaFinal: null,
-
         notasParciales: []
-
     });
 
     const [mostrandoFormulario, setMostrandoFormulario] = useState(false);
-
     const [usuario, setUsuario] = useState(null);
-
     const [cargando, setCargando] = useState(true);
-
 
 
     // 3. AGREGA ESTE NUEVO BLOQUE EN SU LUGAR:
@@ -514,7 +496,10 @@ export default function CarreraTracker() {
 
         const promedioGeneral = calcularPromedioGeneral();
 
-
+        // ⬇️ AGREGAR ESTAS 3 LÍNEAS NUEVAS:
+        const materiasCompletadas = promocionadas + regulares;
+        const materiasProyectadas = materiasCompletadas + cursando;
+        const porcentajeProyectado = total > 0 ? ((materiasProyectadas) / total * 100).toFixed(1) : 0;
 
         return {
 
@@ -872,50 +857,55 @@ export default function CarreraTracker() {
 
                 {/* Barra de progreso principal */}
 
+                {/* BARRA DE PROGRESO MEJORADA */}
                 <div className="bg-white rounded-lg shadow-lg p-4 mb-4">
-
                     <div className="flex items-center justify-between mb-2">
-
                         <h3 className="font-bold text-gray-800 flex items-center gap-2">
-
                             <TrendingUp size={18} />
-
-                            Progreso General: {stats.porcentajeCompletado}%
-
+                            Progreso de Carrera
                         </h3>
-
-                        {stats.promedioGeneral && (
-
-                            <span className="text-sm font-medium text-gray-600">
-
-                                Promedio: {stats.promedioGeneral}
-
-                            </span>
-
-                        )}
-
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-green-500 rounded"></div>
+                                <span className="text-sm text-gray-600">Real: {stats.porcentajeCompletado}%</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-blue-400 rounded"></div>
+                                <span className="text-sm text-gray-600">Proyectado: {stats.porcentajeProyectado}%</span>
+                            </div>
+                            {stats.promedioGeneral && (
+                                <span className="text-sm font-medium text-gray-600">
+                                    Promedio: {stats.promedioGeneral}
+                                </span>
+                            )}
+                        </div>
                     </div>
 
-                    <div className="w-full bg-gray-200 rounded-full h-4">
-
+                    {/* Barra con dos capas */}
+                    <div className="relative w-full bg-gray-200 rounded-full h-6 overflow-hidden">
+                        {/* Capa proyectada (azul) */}
                         <div
-
-                            className="bg-green-500 h-4 rounded-full transition-all duration-500"
-
-                            style={{ width: `${stats.porcentajeCompletado}%` }}
-
+                            className="absolute top-0 left-0 bg-blue-400 h-6 rounded-full transition-all duration-500"
+                            style={{ width: `${stats.porcentajeProyectado}%` }}
                         ></div>
-
+                        {/* Capa real (verde) - se superpone */}
+                        <div
+                            className="absolute top-0 left-0 bg-green-500 h-6 rounded-full transition-all duration-500"
+                            style={{ width: `${stats.porcentajeCompletado}%` }}
+                        ></div>
+                        {/* Texto centrado */}
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-xs font-bold text-white drop-shadow">
+                                {stats.promocionadas + stats.regulares} / {stats.total} materias
+                                {stats.cursando > 0 && ` (+${stats.cursando} cursando)`}
+                            </span>
+                        </div>
                     </div>
 
                     <div className="flex justify-between text-xs text-gray-600 mt-1">
-
                         <span>0%</span>
-
                         <span>100%</span>
-
                     </div>
-
                 </div>
 
 
@@ -983,7 +973,16 @@ export default function CarreraTracker() {
                         Materias
 
                     </button>
-
+                    <button
+                        onClick={() => setPestanaActiva('correlativas')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${pestanaActiva === 'correlativas'
+                            ? 'bg-indigo-600 text-white shadow-lg'
+                            : 'bg-white text-gray-700 hover:bg-gray-100'
+                            }`}
+                    >
+                        <GitBranch size={18} />
+                        Mapa de Correlativas
+                    </button>
                     <button
 
                         onClick={() => setPestanaActiva('examenes')}
@@ -1218,6 +1217,8 @@ export default function CarreraTracker() {
 
                         />
 
+                    ) : pestanaActiva === 'correlativas' ? (
+                        <MapaCorrelativas materias={materias} />
                     ) : (
 
                         <VistaPlanificacion
@@ -1250,7 +1251,300 @@ export default function CarreraTracker() {
 
 }
 
+// 🆕 COMPONENTE MAPA DE CORRELATIVAS
+function MapaCorrelativas({ materias }) {
+    const [filtroAnio, setFiltroAnio] = useState('todos');
+    const [destacarMateria, setDestacarMateria] = useState(null);
 
+    const materiasOrganizadas = () => {
+        const organizadas = {};
+        for (let anio = 1; anio <= 5; anio++) {
+            organizadas[anio] = {
+                cuatrimestre1: materias.filter(m => m.anio === anio && m.cuatrimestre === 1),
+                cuatrimestre2: materias.filter(m => m.anio === anio && m.cuatrimestre === 2)
+            };
+        }
+        return organizadas;
+    };
+
+    const porAnio = materiasOrganizadas();
+
+    const getDependientes = (materiaId) => {
+        return materias.filter(m => m.correlativas && m.correlativas.includes(materiaId));
+    };
+
+    const aniosFiltrados = filtroAnio === 'todos'
+        ? [1, 2, 3, 4, 5]
+        : [parseInt(filtroAnio)];
+
+    return (
+        <div className="space-y-4">
+            {/* Controles */}
+            <div className="bg-white rounded-lg shadow-lg p-4">
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                        <GitBranch className="text-indigo-600" />
+                        Mapa de Correlativas
+                    </h2>
+                    <select
+                        value={filtroAnio}
+                        onChange={(e) => setFiltroAnio(e.target.value)}
+                        className="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    >
+                        <option value="todos">Todos los años</option>
+                        <option value="1">1° Año</option>
+                        <option value="2">2° Año</option>
+                        <option value="3">3° Año</option>
+                        <option value="4">4° Año</option>
+                        <option value="5">5° Año</option>
+                    </select>
+                </div>
+
+                {/* Leyenda */}
+                <div className="flex flex-wrap gap-4 text-xs mb-4 pb-4 border-b">
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-green-100 border-2 border-green-500 rounded"></div>
+                        <span>Promoción</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-yellow-100 border-2 border-yellow-500 rounded"></div>
+                        <span>Regular</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-blue-100 border-2 border-blue-500 rounded"></div>
+                        <span>Cursando</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-red-100 border-2 border-red-500 rounded"></div>
+                        <span>Libre</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-gray-100 border-2 border-gray-500 rounded"></div>
+                        <span>No Cursada</span>
+                    </div>
+                </div>
+
+                {destacarMateria && (
+                    <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+                        <button
+                            onClick={() => setDestacarMateria(null)}
+                            className="float-right text-indigo-600 hover:text-indigo-800"
+                        >
+                            <X size={16} />
+                        </button>
+                        <h4 className="font-bold text-indigo-900 mb-2">
+                            {destacarMateria.nombre}
+                        </h4>
+                        <div className="space-y-2 text-sm">
+                            {destacarMateria.correlativas && destacarMateria.correlativas.length > 0 ? (
+                                <>
+                                    <div>
+                                        <span className="font-medium">Requiere:</span>
+                                        <div className="ml-4 mt-1">
+                                            {destacarMateria.correlativas.map(corrId => {
+                                                const corr = materias.find(m => m.id === corrId);
+                                                return corr ? (
+                                                    <div key={corrId} className="flex items-center gap-2 mb-1">
+                                                        <ArrowRight size={12} className="text-indigo-600" />
+                                                        <span className={`px-2 py-1 rounded text-xs ${COLORES_ESTADO[corr.estado]}`}>
+                                                            {corr.nombre}
+                                                        </span>
+                                                    </div>
+                                                ) : null;
+                                            })}
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-gray-600">Sin correlativas</div>
+                            )}
+
+                            {getDependientes(destacarMateria.id).length > 0 && (
+                                <div>
+                                    <span className="font-medium">Es correlativa de:</span>
+                                    <div className="ml-4 mt-1">
+                                        {getDependientes(destacarMateria.id).map(dep => (
+                                            <div key={dep.id} className="flex items-center gap-2 mb-1">
+                                                <ArrowRight size={12} className="text-orange-600" />
+                                                <span className={`px-2 py-1 rounded text-xs ${COLORES_ESTADO[dep.estado]}`}>
+                                                    {dep.nombre}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Mapa visual */}
+            <div className="bg-white rounded-lg shadow-lg p-6 overflow-x-auto">
+                <div className="min-w-max">
+                    {aniosFiltrados.map(anio => {
+                        const cuatri1 = porAnio[anio].cuatrimestre1;
+                        const cuatri2 = porAnio[anio].cuatrimestre2;
+
+                        if (cuatri1.length === 0 && cuatri2.length === 0) return null;
+
+                        return (
+                            <div key={anio} className="mb-8 last:mb-0">
+                                <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                    <Circle size={12} className="text-indigo-600" />
+                                    {anio}° Año
+                                </h3>
+
+                                <div className="grid grid-cols-2 gap-8">
+                                    {/* Primer Cuatrimestre */}
+                                    <div>
+                                        <h4 className="text-sm font-semibold text-gray-600 mb-3">
+                                            1er Cuatrimestre
+                                        </h4>
+                                        <div className="space-y-3">
+                                            {cuatri1.map(materia => (
+                                                <div key={materia.id} className="relative">
+                                                    <button
+                                                        onClick={() => setDestacarMateria(materia)}
+                                                        className={`w-full text-left p-3 rounded-lg border-2 transition-all ${COLORES_ESTADO[materia.estado]
+                                                            } ${destacarMateria?.id === materia.id
+                                                                ? 'ring-4 ring-indigo-400 scale-105'
+                                                                : 'hover:shadow-lg'
+                                                            }`}
+                                                    >
+                                                        <div className="font-semibold text-sm mb-1">
+                                                            {materia.nombre}
+                                                        </div>
+                                                        <div className="text-xs opacity-75">
+                                                            {materia.estado}
+                                                            {materia.correlativas && materia.correlativas.length > 0 && (
+                                                                <span className="ml-2">
+                                                                    • {materia.correlativas.length} correlativa{materia.correlativas.length > 1 ? 's' : ''}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </button>
+
+                                                    {materia.correlativas && materia.correlativas.length > 0 && (
+                                                        <div className="absolute -left-6 top-1/2 transform -translate-y-1/2">
+                                                            <div className="flex items-center gap-1">
+                                                                <div className="w-4 h-0.5 bg-indigo-400"></div>
+                                                                <Circle size={8} className="text-indigo-400 fill-indigo-400" />
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {getDependientes(materia.id).length > 0 && (
+                                                        <div className="absolute -right-6 top-1/2 transform -translate-y-1/2">
+                                                            <div className="flex items-center gap-1">
+                                                                <Circle size={8} className="text-orange-400 fill-orange-400" />
+                                                                <div className="w-4 h-0.5 bg-orange-400"></div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                            {cuatri1.length === 0 && (
+                                                <div className="text-gray-400 text-sm italic">
+                                                    Sin materias
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Segundo Cuatrimestre */}
+                                    <div>
+                                        <h4 className="text-sm font-semibold text-gray-600 mb-3">
+                                            2do Cuatrimestre
+                                        </h4>
+                                        <div className="space-y-3">
+                                            {cuatri2.map(materia => (
+                                                <div key={materia.id} className="relative">
+                                                    <button
+                                                        onClick={() => setDestacarMateria(materia)}
+                                                        className={`w-full text-left p-3 rounded-lg border-2 transition-all ${COLORES_ESTADO[materia.estado]
+                                                            } ${destacarMateria?.id === materia.id
+                                                                ? 'ring-4 ring-indigo-400 scale-105'
+                                                                : 'hover:shadow-lg'
+                                                            }`}
+                                                    >
+                                                        <div className="font-semibold text-sm mb-1">
+                                                            {materia.nombre}
+                                                        </div>
+                                                        <div className="text-xs opacity-75">
+                                                            {materia.estado}
+                                                            {materia.correlativas && materia.correlativas.length > 0 && (
+                                                                <span className="ml-2">
+                                                                    • {materia.correlativas.length} correlativa{materia.correlativas.length > 1 ? 's' : ''}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </button>
+
+                                                    {materia.correlativas && materia.correlativas.length > 0 && (
+                                                        <div className="absolute -left-6 top-1/2 transform -translate-y-1/2">
+                                                            <div className="flex items-center gap-1">
+                                                                <div className="w-4 h-0.5 bg-indigo-400"></div>
+                                                                <Circle size={8} className="text-indigo-400 fill-indigo-400" />
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {getDependientes(materia.id).length > 0 && (
+                                                        <div className="absolute -right-6 top-1/2 transform -translate-y-1/2">
+                                                            <div className="flex items-center gap-1">
+                                                                <Circle size={8} className="text-orange-400 fill-orange-400" />
+                                                                <div className="w-4 h-0.5 bg-orange-400"></div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                            {cuatri2.length === 0 && (
+                                                <div className="text-gray-400 text-sm italic">
+                                                    Sin materias
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* Resumen de dependencias */}
+            <div className="bg-white rounded-lg shadow-lg p-4">
+                <h3 className="font-bold text-gray-800 mb-3">Análisis de Dependencias</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-blue-50 rounded-lg p-3">
+                        <div className="text-2xl font-bold text-blue-700">
+                            {materias.filter(m => !m.correlativas || m.correlativas.length === 0).length}
+                        </div>
+                        <div className="text-sm text-blue-600">Sin correlativas</div>
+                    </div>
+                    <div className="bg-orange-50 rounded-lg p-3">
+                        <div className="text-2xl font-bold text-orange-700">
+                            {materias.reduce((max, m) =>
+                                Math.max(max, getDependientes(m.id).length), 0
+                            )}
+                        </div>
+                        <div className="text-sm text-orange-600">Máx. materias dependientes</div>
+                    </div>
+                    <div className="bg-purple-50 rounded-lg p-3">
+                        <div className="text-2xl font-bold text-purple-700">
+                            {materias.reduce((max, m) =>
+                                Math.max(max, m.correlativas?.length || 0), 0
+                            )}
+                        </div>
+                        <div className="text-sm text-purple-600">Máx. correlativas requeridas</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 // AGREGÁ ESTE COMPONENTE ANTES de VistaMaterias
 
@@ -4994,9 +5288,9 @@ function VistaMensual({ fechaSeleccionada, eventos }) {
 
                         className={`
 
-              min-h-24 border rounded-lg p-2 transition-all
+                min-h-24 border rounded-lg p-2 transition-all
 
-              ${dia.esMesActual
+                ${dia.esMesActual
 
                                 ? esHoy(dia.fecha)
 
@@ -5008,9 +5302,9 @@ function VistaMensual({ fechaSeleccionada, eventos }) {
 
                             }
 
-              ${dia.eventos.length > 0 ? 'cursor-pointer' : ''}
+                ${dia.eventos.length > 0 ? 'cursor-pointer' : ''}
 
-            `}
+                `}
 
                     >
 
@@ -5018,13 +5312,13 @@ function VistaMensual({ fechaSeleccionada, eventos }) {
 
                         <div className={`
 
-              text-sm font-medium mb-1
+                text-sm font-medium mb-1
 
-              ${esHoy(dia.fecha) ? 'text-blue-600' : ''}
+                ${esHoy(dia.fecha) ? 'text-blue-600' : ''}
 
-              ${!dia.esMesActual ? 'text-gray-400' : ''}
+                ${!dia.esMesActual ? 'text-gray-400' : ''}
 
-            `}>
+                `}>
 
                             {dia.fecha.getDate()}
 
@@ -5044,9 +5338,9 @@ function VistaMensual({ fechaSeleccionada, eventos }) {
 
                                     className={`
 
-                    text-xs p-1 rounded truncate border
+                        text-xs p-1 rounded truncate border
 
-                    ${evento.esExamen
+                        ${evento.esExamen
 
                                             ? 'bg-red-100 text-red-700 border-red-300'
 
@@ -5062,7 +5356,7 @@ function VistaMensual({ fechaSeleccionada, eventos }) {
 
                                         }
 
-                  `}
+                    `}
 
                                     title={evento.titulo}
 
