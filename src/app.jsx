@@ -502,25 +502,16 @@ export default function CarreraTracker() {
         const porcentajeProyectado = total > 0 ? ((materiasProyectadas) / total * 100).toFixed(1) : 0;
 
         return {
-
             total,
-
             promocionadas,
-
             regulares,
-
             cursando,
-
             libres,
-
             noCursadas,
-
             disponibles,
-
             porcentajeCompletado,
-
+            porcentajeProyectado,  // ⬅️ AGREGAR ESTA LÍNEA
             promedioGeneral
-
         };
 
     };
@@ -1143,104 +1134,57 @@ export default function CarreraTracker() {
 
                 {/* Contenido según pestaña */}
 
+                {/* Contenido según pestaña */}
                 {
-
-                    pestanaActiva === 'calendario' ? (
-
-                        <CalendarioPrincipal
-
-                            materias={materias}
-
-                            recordatorios={recordatorios}
-
-                            metas={metas}
-
-                            planExamenes={planExamenes} // ⬅️ IMPORTANTE agregar esta prop
-
-                        />
-
-                    ) : pestanaActiva === 'materias' ? (
-
-                        <VistaMaterias
-
-                            materias={materias}
-
-                            mostrandoFormulario={mostrandoFormulario}
-
-                            setMostrandoFormulario={setMostrandoFormulario}
-
-                            nuevaMateria={nuevaMateria}
-
-                            setNuevaMateria={setNuevaMateria}
-
-                            agregarMateria={agregarMateria}
-
-                            actualizarMateria={actualizarMateria}
-
-                            puedeCursar={puedeCursar} // ⬅️ AGR
-
-                            eliminarMateria={eliminarMateria}
-
-                            agregarNotaParcial={agregarNotaParcial}
-
-                            calcularPromedioMateria={calcularPromedioMateria}
-
-                        />
-
-                    ) : pestanaActiva === 'examenes' ? (
-
-                        <VistaMesasExamenes
-
-                            materias={materias}
-
-                            materiasParaExamen={materiasParaExamen}
-
-                            planExamenes={planExamenes}
-
-                            agregarExamen={agregarExamen}
-
-                            eliminarExamen={eliminarExamen}
-
-                            actualizarMateria={actualizarMateria}
-
-                            marcarComoPromovida={marcarComoPromovida}
-
-                        />
-
-                    ) : pestanaActiva === 'estadisticas' ? (
-
-                        <VistaEstadisticas
-
-                            stats={stats}
-
-                            materias={materias}
-
-                        />
-
-                    ) : pestanaActiva === 'correlativas' ? (
+                    pestanaActiva === 'correlativas' ? (
                         <MapaCorrelativas materias={materias} />
-                    ) : (
-
-                        <VistaPlanificacion
-
+                    ) : pestanaActiva === 'calendario' ? (
+                        <CalendarioPrincipal
                             materias={materias}
-
                             recordatorios={recordatorios}
-
                             metas={metas}
-
-                            agregarRecordatorio={agregarRecordatorio}
-
-                            eliminarRecordatorio={eliminarRecordatorio}
-
-                            toggleRecordatorioCompletado={toggleRecordatorioCompletado}
-
-                            agregarMeta={agregarMeta}
-
-                            toggleMetaCompletada={toggleMetaCompletada}
-
+                            planExamenes={planExamenes}
                         />
-
+                    ) : pestanaActiva === 'materias' ? (
+                        <VistaMaterias
+                            materias={materias}
+                            mostrandoFormulario={mostrandoFormulario}
+                            setMostrandoFormulario={setMostrandoFormulario}
+                            nuevaMateria={nuevaMateria}
+                            setNuevaMateria={setNuevaMateria}
+                            agregarMateria={agregarMateria}
+                            actualizarMateria={actualizarMateria}
+                            puedeCursar={puedeCursar}
+                            eliminarMateria={eliminarMateria}
+                            agregarNotaParcial={agregarNotaParcial}
+                            calcularPromedioMateria={calcularPromedioMateria}
+                        />
+                    ) : pestanaActiva === 'examenes' ? (
+                        <VistaMesasExamenes
+                            materias={materias}
+                            materiasParaExamen={materiasParaExamen}
+                            planExamenes={planExamenes}
+                            agregarExamen={agregarExamen}
+                            eliminarExamen={eliminarExamen}
+                            actualizarMateria={actualizarMateria}
+                            marcarComoPromovida={marcarComoPromovida}
+                        />
+                    ) : pestanaActiva === 'estadisticas' ? (
+                        <VistaEstadisticas
+                            stats={stats}
+                            materias={materias}
+                        />
+                    ) : (
+                        <VistaPlanificacion
+                            materias={materias}
+                            recordatorios={recordatorios}
+                            metas={metas}
+                            agregarRecordatorio={agregarRecordatorio}
+                            eliminarRecordatorio={eliminarRecordatorio}
+                            toggleRecordatorioCompletado={toggleRecordatorioCompletado}
+                            agregarMeta={agregarMeta}
+                            toggleMetaCompletada={toggleMetaCompletada}
+                        />
                     )}
 
             </div>
@@ -1971,6 +1915,7 @@ function VistaMaterias({
     calcularPromedioMateria
 
 }) {
+
 
     return (
 
