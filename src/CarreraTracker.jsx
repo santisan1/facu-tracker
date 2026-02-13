@@ -1196,300 +1196,426 @@ export default function CarreraTracker() {
 }
 
 // 🆕 COMPONENTE MAPA DE CORRELATIVAS
+// 🎨 MAPA DE CORRELATIVAS INTERACTIVO - VERSIÓN CON NODOS FLOTANTES
+// Copia SOLO este componente y reemplaza el MapaCorrelativas que tienes
+
+// 🆕 COMPONENTE MAPA DE CORRELATIVAS - VERSIÓN INTERACTIVA CON NODOS FLOTANTES
 function MapaCorrelativas({ materias }) {
-    const [filtroAnio, setFiltroAnio] = useState('todos');
+    const [nodos, setNodos] = useState([]);
     const [destacarMateria, setDestacarMateria] = useState(null);
+    const [arrastrandoNodo, setArrastrandoNodo] = useState(null);
+    const [mostrarConexiones, setMostrarConexiones] = useState(true);
+    const [modoVista, setModoVista] = useState('automatico'); // 'automatico' o 'manual'
+    const canvasRef = React.useRef(null);
 
-    const materiasOrganizadas = () => {
-        const organizadas = {};
-        for (let anio = 1; anio <= 5; anio++) {
-            organizadas[anio] = {
-                cuatrimestre1: materias.filter(m => m.anio === anio && m.cuatrimestre === 1),
-                cuatrimestre2: materias.filter(m => m.anio === anio && m.cuatrimestre === 2)
+    // Inicializar posiciones de nodos automáticamente
+    useEffect(() => {
+        if (materias.length === 0) return;
+
+        const nodosIniciales = materias.map((materia, index) => {
+            // Posición automática basada en año y cuatrimestre
+            const columna = (materia.anio - 1) * 2 + (materia.cuatrimestre - 1);
+            const materiasMismaColumna = materias.filter(
+                m => (m.anio - 1) * 2 + (m.cuatrimestre - 1) === columna
+            );
+            const indexEnColumna = materiasMismaColumna.indexOf(materia);
+
+            return {
+                id: materia.id,
+                x: 120 + columna * 200,
+                y: 120 + indexEnColumna * 140,
+                materia: materia
             };
-        }
-        return organizadas;
-    };
+        });
 
-    const porAnio = materiasOrganizadas();
+        setNodos(nodosIniciales);
+    }, [materias]);
 
     const getDependientes = (materiaId) => {
         return materias.filter(m => m.correlativas && m.correlativas.includes(materiaId));
     };
 
-    const aniosFiltrados = filtroAnio === 'todos'
-        ? [1, 2, 3, 4, 5]
-        : [parseInt(filtroAnio)];
+    const getMateriasCriticas = () => {
+        return materias
+            .map(m => ({
+                ...m,
+                dependientes: getDependientes(m.id).length
+            }))
+            .filter(m => m.dependientes >= 2)
+            .sort((a, b) => b.dependientes - a.dependientes);
+    };
+
+    const handleMouseDown = (e, nodoId) => {
+        if (modoVista === 'manual') {
+            setArrastrandoNodo(nodoId);
+        }
+    };
+
+    const handleMouseMove = (e) => {
+        if (arrastrandoNodo && canvasRef.current) {
+            const rect = canvasRef.current.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            setNodos(prev => prev.map(nodo =>
+                nodo.id === arrastrandoNodo
+                    ? { ...nodo, x, y }
+                    : nodo
+            ));
+        }
+    };
+
+    const handleMouseUp = () => {
+        setArrastrandoNodo(null);
+    };
+
+    const getNodoById = (id) => nodos.find(n => n.id === id);
+
+    const autoOrganizar = () => {
+        const nodosOrganizados = materias.map((materia, index) => {
+            const columna = (materia.anio - 1) * 2 + (materia.cuatrimestre - 1);
+            const materiasMismaColumna = materias.filter(
+                m => (m.anio - 1) * 2 + (m.cuatrimestre - 1) === columna
+            );
+            const indexEnColumna = materiasMismaColumna.indexOf(materia);
+
+            return {
+                id: materia.id,
+                x: 120 + columna * 200,
+                y: 120 + indexEnColumna * 140,
+                materia: materia
+            };
+        });
+
+        setNodos(nodosOrganizados);
+    };
+
+    const materiasCriticas = getMateriasCriticas();
 
     return (
         <div className="space-y-4">
-            {/* Controles */}
+            {/* Panel de controles */}
             <div className="bg-white rounded-lg shadow-lg p-4">
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex flex-wrap justify-between items-center gap-4">
                     <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                         <GitBranch className="text-indigo-600" />
-                        Mapa de Correlativas
+                        Mapa de Correlativas Interactivo
                     </h2>
-                    <select
-                        value={filtroAnio}
-                        onChange={(e) => setFiltroAnio(e.target.value)}
-                        className="border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                    >
-                        <option value="todos">Todos los años</option>
-                        <option value="1">1° Año</option>
-                        <option value="2">2° Año</option>
-                        <option value="3">3° Año</option>
-                        <option value="4">4° Año</option>
-                        <option value="5">5° Año</option>
-                    </select>
+
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            onClick={() => setMostrarConexiones(!mostrarConexiones)}
+                            className={`px-3 py-2 rounded-lg text-sm font-medium transition ${mostrarConexiones
+                                ? 'bg-indigo-600 text-white'
+                                : 'bg-gray-200 text-gray-700'
+                                }`}
+                        >
+                            {mostrarConexiones ? '🔗 Ocultar Líneas' : '🔗 Mostrar Líneas'}
+                        </button>
+
+                        <button
+                            onClick={() => setModoVista(modoVista === 'automatico' ? 'manual' : 'automatico')}
+                            className={`px-3 py-2 rounded-lg text-sm font-medium transition ${modoVista === 'manual'
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-gray-200 text-gray-700'
+                                }`}
+                        >
+                            {modoVista === 'manual' ? '✋ Modo Manual' : '🤖 Modo Auto'}
+                        </button>
+
+                        <button
+                            onClick={autoOrganizar}
+                            className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition"
+                        >
+                            ↻ Reorganizar
+                        </button>
+
+                        <button
+                            onClick={() => setDestacarMateria(null)}
+                            className="px-3 py-2 bg-gray-600 text-white rounded-lg text-sm font-medium hover:bg-gray-700 transition"
+                        >
+                            ✕ Limpiar
+                        </button>
+                    </div>
                 </div>
 
                 {/* Leyenda */}
-                <div className="flex flex-wrap gap-4 text-xs mb-4 pb-4 border-b">
+                <div className="flex flex-wrap gap-4 text-xs mt-4 pt-4 border-t">
                     <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 bg-green-100 border-2 border-green-500 rounded"></div>
+                        <div className="w-4 h-4 bg-green-100 border-2 border-green-500 rounded-full"></div>
                         <span>Promoción</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 bg-yellow-100 border-2 border-yellow-500 rounded"></div>
+                        <div className="w-4 h-4 bg-yellow-100 border-2 border-yellow-500 rounded-full"></div>
                         <span>Regular</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 bg-blue-100 border-2 border-blue-500 rounded"></div>
+                        <div className="w-4 h-4 bg-blue-100 border-2 border-blue-500 rounded-full"></div>
                         <span>Cursando</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 bg-red-100 border-2 border-red-500 rounded"></div>
+                        <div className="w-4 h-4 bg-red-100 border-2 border-red-500 rounded-full"></div>
                         <span>Libre</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 bg-gray-100 border-2 border-gray-500 rounded"></div>
+                        <div className="w-4 h-4 bg-gray-100 border-2 border-gray-500 rounded-full"></div>
                         <span>No Cursada</span>
                     </div>
                 </div>
 
-                {destacarMateria && (
-                    <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
-                        <button
-                            onClick={() => setDestacarMateria(null)}
-                            className="float-right text-indigo-600 hover:text-indigo-800"
-                        >
-                            <X size={16} />
-                        </button>
-                        <h4 className="font-bold text-indigo-900 mb-2">
-                            {destacarMateria.nombre}
-                        </h4>
-                        <div className="space-y-2 text-sm">
-                            {destacarMateria.correlativas && destacarMateria.correlativas.length > 0 ? (
-                                <>
-                                    <div>
-                                        <span className="font-medium">Requiere:</span>
-                                        <div className="ml-4 mt-1">
-                                            {destacarMateria.correlativas.map(corrId => {
-                                                const corr = materias.find(m => m.id === corrId);
-                                                return corr ? (
-                                                    <div key={corrId} className="flex items-center gap-2 mb-1">
-                                                        <ArrowRight size={12} className="text-indigo-600" />
-                                                        <span className={`px-2 py-1 rounded text-xs ${COLORES_ESTADO[corr.estado]}`}>
-                                                            {corr.nombre}
-                                                        </span>
-                                                    </div>
-                                                ) : null;
-                                            })}
-                                        </div>
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="text-gray-600">Sin correlativas</div>
-                            )}
-
-                            {getDependientes(destacarMateria.id).length > 0 && (
-                                <div>
-                                    <span className="font-medium">Es correlativa de:</span>
-                                    <div className="ml-4 mt-1">
-                                        {getDependientes(destacarMateria.id).map(dep => (
-                                            <div key={dep.id} className="flex items-center gap-2 mb-1">
-                                                <ArrowRight size={12} className="text-orange-600" />
-                                                <span className={`px-2 py-1 rounded text-xs ${COLORES_ESTADO[dep.estado]}`}>
-                                                    {dep.nombre}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+                {modoVista === 'manual' && (
+                    <div className="mt-3 bg-purple-50 border border-purple-200 rounded-lg p-2 text-sm text-purple-700">
+                        💡 <strong>Modo Manual:</strong> Arrastra los nodos para reorganizar el mapa a tu gusto
                     </div>
                 )}
             </div>
 
-            {/* Mapa visual */}
-            <div className="bg-white rounded-lg shadow-lg p-6 overflow-x-auto">
-                <div className="min-w-max">
-                    {aniosFiltrados.map(anio => {
-                        const cuatri1 = porAnio[anio].cuatrimestre1;
-                        const cuatri2 = porAnio[anio].cuatrimestre2;
+            {/* Materias críticas */}
+            {materiasCriticas.length > 0 && (
+                <div className="bg-orange-50 border-2 border-orange-300 rounded-lg p-4">
+                    <h3 className="font-bold text-orange-900 mb-3 flex items-center gap-2">
+                        ⚠️ Camino Crítico - Materias que Bloquean Otras
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {materiasCriticas.slice(0, 3).map(materia => (
+                            <button
+                                key={materia.id}
+                                onClick={() => setDestacarMateria(materia)}
+                                className={`${COLORES_ESTADO[materia.estado]} p-3 rounded-lg border-2 text-left hover:shadow-lg transition-all`}
+                            >
+                                <div className="font-bold text-sm">{materia.nombre}</div>
+                                <div className="text-xs mt-1">
+                                    🔒 Bloquea <strong>{materia.dependientes}</strong> materia{materia.dependientes > 1 ? 's' : ''}
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
-                        if (cuatri1.length === 0 && cuatri2.length === 0) return null;
+            {/* Panel de información de materia destacada */}
+            {destacarMateria && (
+                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-lg p-4 shadow-xl">
+                    <button
+                        onClick={() => setDestacarMateria(null)}
+                        className="float-right text-indigo-600 hover:text-indigo-800 font-bold"
+                    >
+                        ✕
+                    </button>
+                    <h4 className="font-bold text-indigo-900 mb-3 text-lg">
+                        {destacarMateria.nombre}
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <span className="font-medium text-indigo-800">📍 Ubicación:</span>
+                            <div className="text-sm text-indigo-700 mt-1">
+                                {destacarMateria.anio}° Año • {destacarMateria.cuatrimestre === 1 ? '1er' : '2do'} Cuatrimestre
+                            </div>
+                            <div className={`inline-block px-3 py-1 rounded-full text-xs font-bold mt-2 ${COLORES_ESTADO[destacarMateria.estado]}`}>
+                                {destacarMateria.estado}
+                            </div>
+                        </div>
+
+                        <div>
+                            {destacarMateria.correlativas && destacarMateria.correlativas.length > 0 ? (
+                                <>
+                                    <span className="font-medium text-indigo-800">⬅️ Requiere:</span>
+                                    <div className="mt-1 space-y-1">
+                                        {destacarMateria.correlativas.map(corrId => {
+                                            const corr = materias.find(m => m.id === corrId);
+                                            return corr ? (
+                                                <div key={corrId} className={`text-xs px-2 py-1 rounded ${COLORES_ESTADO[corr.estado]}`}>
+                                                    {corr.nombre}
+                                                </div>
+                                            ) : null;
+                                        })}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-sm text-green-700">
+                                    ✅ Sin correlativas - ¡Puedes cursarla!
+                                </div>
+                            )}
+                        </div>
+
+                        {getDependientes(destacarMateria.id).length > 0 && (
+                            <div className="md:col-span-2 mt-2 pt-2 border-t border-indigo-200">
+                                <span className="font-medium text-indigo-800">➡️ Habilita:</span>
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                    {getDependientes(destacarMateria.id).map(dep => (
+                                        <span key={dep.id} className={`text-xs px-2 py-1 rounded ${COLORES_ESTADO[dep.estado]}`}>
+                                            {dep.nombre}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Canvas interactivo */}
+            <div className="bg-white rounded-lg shadow-lg p-4 overflow-hidden">
+                <div
+                    ref={canvasRef}
+                    className="relative bg-gradient-to-br from-gray-50 to-blue-50 rounded-lg border-2 border-gray-200"
+                    style={{
+                        width: '100%',
+                        height: '800px',
+                        cursor: modoVista === 'manual' && arrastrandoNodo ? 'grabbing' : 'default'
+                    }}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onMouseLeave={handleMouseUp}
+                >
+                    {/* SVG para las conexiones */}
+                    {mostrarConexiones && (
+                        <svg className="absolute inset-0 pointer-events-none" style={{ width: '100%', height: '100%' }}>
+                            <defs>
+                                <marker
+                                    id="arrowhead"
+                                    markerWidth="10"
+                                    markerHeight="10"
+                                    refX="9"
+                                    refY="3"
+                                    orient="auto"
+                                >
+                                    <polygon points="0 0, 10 3, 0 6" fill="#6366f1" />
+                                </marker>
+                            </defs>
+                            {nodos.map(nodo => {
+                                if (!nodo.materia.correlativas) return null;
+                                return nodo.materia.correlativas.map(corrId => {
+                                    const nodoOrigen = getNodoById(corrId);
+                                    if (!nodoOrigen) return null;
+
+                                    const esDestacada = destacarMateria &&
+                                        (destacarMateria.id === nodo.id || destacarMateria.id === corrId);
+
+                                    return (
+                                        <g key={`${corrId}-${nodo.id}`}>
+                                            <line
+                                                x1={nodoOrigen.x + 80}
+                                                y1={nodoOrigen.y + 40}
+                                                x2={nodo.x}
+                                                y2={nodo.y + 40}
+                                                stroke={esDestacada ? '#6366f1' : '#cbd5e1'}
+                                                strokeWidth={esDestacada ? 3 : 2}
+                                                markerEnd="url(#arrowhead)"
+                                                className="transition-all duration-300"
+                                            />
+                                        </g>
+                                    );
+                                });
+                            })}
+                        </svg>
+                    )}
+
+                    {/* Nodos flotantes */}
+                    {nodos.map(nodo => {
+                        const esDestacada = destacarMateria?.id === nodo.id;
+                        const estaConectada = destacarMateria && (
+                            destacarMateria.correlativas?.includes(nodo.id) ||
+                            getDependientes(destacarMateria.id).some(d => d.id === nodo.id)
+                        );
 
                         return (
-                            <div key={anio} className="mb-8 last:mb-0">
-                                <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                                    <Circle size={12} className="text-indigo-600" />
-                                    {anio}° Año
-                                </h3>
-
-                                <div className="grid grid-cols-2 gap-8">
-                                    {/* Primer Cuatrimestre */}
-                                    <div>
-                                        <h4 className="text-sm font-semibold text-gray-600 mb-3">
-                                            1er Cuatrimestre
-                                        </h4>
-                                        <div className="space-y-3">
-                                            {cuatri1.map(materia => (
-                                                <div key={materia.id} className="relative">
-                                                    <button
-                                                        onClick={() => setDestacarMateria(materia)}
-                                                        className={`w-full text-left p-3 rounded-lg border-2 transition-all ${COLORES_ESTADO[materia.estado]
-                                                            } ${destacarMateria?.id === materia.id
-                                                                ? 'ring-4 ring-indigo-400 scale-105'
-                                                                : 'hover:shadow-lg'
-                                                            }`}
-                                                    >
-                                                        <div className="font-semibold text-sm mb-1">
-                                                            {materia.nombre}
-                                                        </div>
-                                                        <div className="text-xs opacity-75">
-                                                            {materia.estado}
-                                                            {materia.correlativas && materia.correlativas.length > 0 && (
-                                                                <span className="ml-2">
-                                                                    • {materia.correlativas.length} correlativa{materia.correlativas.length > 1 ? 's' : ''}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </button>
-
-                                                    {materia.correlativas && materia.correlativas.length > 0 && (
-                                                        <div className="absolute -left-6 top-1/2 transform -translate-y-1/2">
-                                                            <div className="flex items-center gap-1">
-                                                                <div className="w-4 h-0.5 bg-indigo-400"></div>
-                                                                <Circle size={8} className="text-indigo-400 fill-indigo-400" />
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {getDependientes(materia.id).length > 0 && (
-                                                        <div className="absolute -right-6 top-1/2 transform -translate-y-1/2">
-                                                            <div className="flex items-center gap-1">
-                                                                <Circle size={8} className="text-orange-400 fill-orange-400" />
-                                                                <div className="w-4 h-0.5 bg-orange-400"></div>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ))}
-                                            {cuatri1.length === 0 && (
-                                                <div className="text-gray-400 text-sm italic">
-                                                    Sin materias
-                                                </div>
-                                            )}
-                                        </div>
+                            <div
+                                key={nodo.id}
+                                className={`absolute transition-all duration-300 ${modoVista === 'manual' ? 'cursor-grab active:cursor-grabbing' : ''
+                                    } ${esDestacada ? 'z-50 scale-110' : estaConectada ? 'z-40 scale-105' : 'z-30'
+                                    }`}
+                                style={{
+                                    left: `${nodo.x}px`,
+                                    top: `${nodo.y}px`,
+                                    width: '160px'
+                                }}
+                                onMouseDown={(e) => handleMouseDown(e, nodo.id)}
+                            >
+                                <button
+                                    onClick={() => setDestacarMateria(nodo.materia)}
+                                    className={`w-full p-3 rounded-xl border-3 shadow-lg hover:shadow-2xl transition-all ${COLORES_ESTADO[nodo.materia.estado]
+                                        } ${esDestacada ? 'ring-4 ring-indigo-400 border-indigo-500' : ''
+                                        } ${estaConectada && !esDestacada ? 'ring-2 ring-purple-300' : ''
+                                        }`}
+                                >
+                                    <div className="font-bold text-xs leading-tight mb-1">
+                                        {nodo.materia.nombre}
                                     </div>
-
-                                    {/* Segundo Cuatrimestre */}
-                                    <div>
-                                        <h4 className="text-sm font-semibold text-gray-600 mb-3">
-                                            2do Cuatrimestre
-                                        </h4>
-                                        <div className="space-y-3">
-                                            {cuatri2.map(materia => (
-                                                <div key={materia.id} className="relative">
-                                                    <button
-                                                        onClick={() => setDestacarMateria(materia)}
-                                                        className={`w-full text-left p-3 rounded-lg border-2 transition-all ${COLORES_ESTADO[materia.estado]
-                                                            } ${destacarMateria?.id === materia.id
-                                                                ? 'ring-4 ring-indigo-400 scale-105'
-                                                                : 'hover:shadow-lg'
-                                                            }`}
-                                                    >
-                                                        <div className="font-semibold text-sm mb-1">
-                                                            {materia.nombre}
-                                                        </div>
-                                                        <div className="text-xs opacity-75">
-                                                            {materia.estado}
-                                                            {materia.correlativas && materia.correlativas.length > 0 && (
-                                                                <span className="ml-2">
-                                                                    • {materia.correlativas.length} correlativa{materia.correlativas.length > 1 ? 's' : ''}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </button>
-
-                                                    {materia.correlativas && materia.correlativas.length > 0 && (
-                                                        <div className="absolute -left-6 top-1/2 transform -translate-y-1/2">
-                                                            <div className="flex items-center gap-1">
-                                                                <div className="w-4 h-0.5 bg-indigo-400"></div>
-                                                                <Circle size={8} className="text-indigo-400 fill-indigo-400" />
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {getDependientes(materia.id).length > 0 && (
-                                                        <div className="absolute -right-6 top-1/2 transform -translate-y-1/2">
-                                                            <div className="flex items-center gap-1">
-                                                                <Circle size={8} className="text-orange-400 fill-orange-400" />
-                                                                <div className="w-4 h-0.5 bg-orange-400"></div>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ))}
-                                            {cuatri2.length === 0 && (
-                                                <div className="text-gray-400 text-sm italic">
-                                                    Sin materias
-                                                </div>
-                                            )}
-                                        </div>
+                                    <div className="text-[10px] opacity-75">
+                                        {nodo.materia.anio}° • C{nodo.materia.cuatrimestre}
                                     </div>
-                                </div>
+                                    {nodo.materia.correlativas && nodo.materia.correlativas.length > 0 && (
+                                        <div className="text-[10px] mt-1 font-medium">
+                                            🔗 {nodo.materia.correlativas.length}
+                                        </div>
+                                    )}
+                                    {getDependientes(nodo.materia.id).length > 0 && (
+                                        <div className="text-[10px] mt-1 font-medium">
+                                            🔒 {getDependientes(nodo.materia.id).length}
+                                        </div>
+                                    )}
+                                </button>
                             </div>
                         );
                     })}
+
+                    {/* Indicadores de año en el fondo */}
+                    <div className="absolute inset-0 pointer-events-none">
+                        {[1, 2, 3, 4, 5].map(anio => (
+                            <div
+                                key={anio}
+                                className="absolute text-6xl font-bold opacity-5 text-gray-400"
+                                style={{
+                                    left: `${60 + (anio - 1) * 200}px`,
+                                    top: '50%',
+                                    transform: 'translateY(-50%)'
+                                }}
+                            >
+                                {anio}°
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
 
-            {/* Resumen de dependencias */}
+            {/* Estadísticas */}
             <div className="bg-white rounded-lg shadow-lg p-4">
-                <h3 className="font-bold text-gray-800 mb-3">Análisis de Dependencias</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-blue-50 rounded-lg p-3">
-                        <div className="text-2xl font-bold text-blue-700">
+                <h3 className="font-bold text-gray-800 mb-3">📊 Análisis del Mapa</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-blue-50 rounded-lg p-3 text-center">
+                        <div className="text-3xl font-bold text-blue-700">
                             {materias.filter(m => !m.correlativas || m.correlativas.length === 0).length}
                         </div>
-                        <div className="text-sm text-blue-600">Sin correlativas</div>
+                        <div className="text-xs text-blue-600 mt-1">Sin correlativas</div>
+                        <div className="text-[10px] text-blue-500 mt-1">¡Puedes cursarlas ya!</div>
                     </div>
-                    <div className="bg-orange-50 rounded-lg p-3">
-                        <div className="text-2xl font-bold text-orange-700">
-                            {materias.reduce((max, m) =>
-                                Math.max(max, getDependientes(m.id).length), 0
-                            )}
+                    <div className="bg-orange-50 rounded-lg p-3 text-center">
+                        <div className="text-3xl font-bold text-orange-700">
+                            {materiasCriticas.length}
                         </div>
-                        <div className="text-sm text-orange-600">Máx. maaterias dependientes</div>
+                        <div className="text-xs text-orange-600 mt-1">Críticas</div>
+                        <div className="text-[10px] text-orange-500 mt-1">Priorizalas</div>
                     </div>
-                    <div className="bg-purple-50 rounded-lg p-3">
-                        <div className="text-2xl font-bold text-purple-700">
-                            {materias.reduce((max, m) =>
-                                Math.max(max, m.correlativas?.length || 0), 0
-                            )}
+                    <div className="bg-purple-50 rounded-lg p-3 text-center">
+                        <div className="text-3xl font-bold text-purple-700">
+                            {materias.reduce((max, m) => Math.max(max, m.correlativas?.length || 0), 0)}
                         </div>
-                        <div className="text-sm text-purple-600">Máx. correlativas requeridas</div>
+                        <div className="text-xs text-purple-600 mt-1">Máx. requisitos</div>
+                        <div className="text-[10px] text-purple-500 mt-1">Materia más compleja</div>
+                    </div>
+                    <div className="bg-green-50 rounded-lg p-3 text-center">
+                        <div className="text-3xl font-bold text-green-700">
+                            {materias.reduce((sum, m) => sum + (m.correlativas?.length || 0), 0)}
+                        </div>
+                        <div className="text-xs text-green-600 mt-1">Conexiones totales</div>
+                        <div className="text-[10px] text-green-500 mt-1">Red de dependencias</div>
                     </div>
                 </div>
             </div>
         </div>
     );
 }
-
 // AGREGÁ ESTE COMPONENTE ANTES de VistaMaterias
 
 function MateriaCard({
