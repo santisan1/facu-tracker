@@ -1200,20 +1200,43 @@ export default function CarreraTracker() {
 // Copia SOLO este componente y reemplaza el MapaCorrelativas que tienes
 
 // 🆕 COMPONENTE MAPA DE CORRELATIVAS - VERSIÓN INTERACTIVA CON NODOS FLOTANTES
+// 🎨 MAPA DE CORRELATIVAS MEJORADO - CON SCROLL, ZOOM Y MEJOR UX
+// REEMPLAZA tu componente MapaCorrelativas con este
+
 function MapaCorrelativas({ materias }) {
     const [nodos, setNodos] = useState([]);
     const [destacarMateria, setDestacarMateria] = useState(null);
     const [arrastrandoNodo, setArrastrandoNodo] = useState(null);
     const [mostrarConexiones, setMostrarConexiones] = useState(true);
-    const [modoVista, setModoVista] = useState('automatico'); // 'automatico' o 'manual'
+    const [modoVista, setModoVista] = useState('automatico');
+    const [zoom, setZoom] = useState(1);
+    const [filtroTipo, setFiltroTipo] = useState('todos'); // 'todos', 'criticas', 'finales', 'iniciales'
     const canvasRef = React.useRef(null);
+    const [dimensionesCanvas, setDimensionesCanvas] = useState({ width: 2000, height: 1200 });
 
-    // Inicializar posiciones de nodos automáticamente
+    // Calcular dimensiones necesarias del canvas
     useEffect(() => {
         if (materias.length === 0) return;
 
-        const nodosIniciales = materias.map((materia, index) => {
-            // Posición automática basada en año y cuatrimestre
+        // Calcular cuántas columnas necesitamos (5 años × 2 cuatrimestres = 10 columnas)
+        const numColumnas = 10;
+        const materiasMaxPorColumna = Math.max(
+            ...Array.from({ length: numColumnas }, (_, col) =>
+                materias.filter(m => (m.anio - 1) * 2 + (m.cuatrimestre - 1) === col).length
+            )
+        );
+
+        const anchoNecesario = Math.max(2000, (numColumnas + 1) * 220);
+        const altoNecesario = Math.max(1200, (materiasMaxPorColumna + 1) * 150);
+
+        setDimensionesCanvas({ width: anchoNecesario, height: altoNecesario });
+    }, [materias]);
+
+    // Inicializar posiciones de nodos
+    useEffect(() => {
+        if (materias.length === 0) return;
+
+        const nodosIniciales = materias.map((materia) => {
             const columna = (materia.anio - 1) * 2 + (materia.cuatrimestre - 1);
             const materiasMismaColumna = materias.filter(
                 m => (m.anio - 1) * 2 + (m.cuatrimestre - 1) === columna
@@ -1222,8 +1245,8 @@ function MapaCorrelativas({ materias }) {
 
             return {
                 id: materia.id,
-                x: 120 + columna * 200,
-                y: 120 + indexEnColumna * 140,
+                x: 150 + columna * 220,
+                y: 100 + indexEnColumna * 150,
                 materia: materia
             };
         });
@@ -1245,6 +1268,16 @@ function MapaCorrelativas({ materias }) {
             .sort((a, b) => b.dependientes - a.dependientes);
     };
 
+    const getMateriasFinales = () => {
+        // Materias que NO son correlativas de ninguna otra (mueren ahí)
+        return materias.filter(m => getDependientes(m.id).length === 0);
+    };
+
+    const getMateriasIniciales = () => {
+        // Materias sin correlativas (puedes empezar por ellas)
+        return materias.filter(m => !m.correlativas || m.correlativas.length === 0);
+    };
+
     const handleMouseDown = (e, nodoId) => {
         if (modoVista === 'manual') {
             setArrastrandoNodo(nodoId);
@@ -1254,13 +1287,11 @@ function MapaCorrelativas({ materias }) {
     const handleMouseMove = (e) => {
         if (arrastrandoNodo && canvasRef.current) {
             const rect = canvasRef.current.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const x = (e.clientX - rect.left) / zoom;
+            const y = (e.clientY - rect.top) / zoom;
 
             setNodos(prev => prev.map(nodo =>
-                nodo.id === arrastrandoNodo
-                    ? { ...nodo, x, y }
-                    : nodo
+                nodo.id === arrastrandoNodo ? { ...nodo, x, y } : nodo
             ));
         }
     };
@@ -1272,7 +1303,7 @@ function MapaCorrelativas({ materias }) {
     const getNodoById = (id) => nodos.find(n => n.id === id);
 
     const autoOrganizar = () => {
-        const nodosOrganizados = materias.map((materia, index) => {
+        const nodosOrganizados = materias.map((materia) => {
             const columna = (materia.anio - 1) * 2 + (materia.cuatrimestre - 1);
             const materiasMismaColumna = materias.filter(
                 m => (m.anio - 1) * 2 + (m.cuatrimestre - 1) === columna
@@ -1281,8 +1312,8 @@ function MapaCorrelativas({ materias }) {
 
             return {
                 id: materia.id,
-                x: 120 + columna * 200,
-                y: 120 + indexEnColumna * 140,
+                x: 150 + columna * 220,
+                y: 100 + indexEnColumna * 150,
                 materia: materia
             };
         });
@@ -1291,12 +1322,23 @@ function MapaCorrelativas({ materias }) {
     };
 
     const materiasCriticas = getMateriasCriticas();
+    const materiasFinales = getMateriasFinales();
+    const materiasIniciales = getMateriasIniciales();
+
+    // Filtrar nodos según el filtro activo
+    const nodosFiltrados = nodos.filter(nodo => {
+        if (filtroTipo === 'todos') return true;
+        if (filtroTipo === 'criticas') return materiasCriticas.some(m => m.id === nodo.id);
+        if (filtroTipo === 'finales') return materiasFinales.some(m => m.id === nodo.id);
+        if (filtroTipo === 'iniciales') return materiasIniciales.some(m => m.id === nodo.id);
+        return true;
+    });
 
     return (
         <div className="space-y-4">
-            {/* Panel de controles */}
+            {/* Panel de controles mejorado */}
             <div className="bg-white rounded-lg shadow-lg p-4">
-                <div className="flex flex-wrap justify-between items-center gap-4">
+                <div className="flex flex-wrap justify-between items-center gap-4 mb-4">
                     <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                         <GitBranch className="text-indigo-600" />
                         Mapa de Correlativas Interactivo
@@ -1339,8 +1381,74 @@ function MapaCorrelativas({ materias }) {
                     </div>
                 </div>
 
+                {/* Controles de Zoom */}
+                <div className="flex items-center gap-4 mb-4 pb-4 border-b">
+                    <span className="text-sm font-medium text-gray-700">Zoom:</span>
+                    <button
+                        onClick={() => setZoom(Math.max(0.5, zoom - 0.1))}
+                        className="px-3 py-1 bg-gray-200 rounded-lg text-sm hover:bg-gray-300"
+                    >
+                        -
+                    </button>
+                    <span className="text-sm font-medium min-w-[60px] text-center">
+                        {(zoom * 100).toFixed(0)}%
+                    </span>
+                    <button
+                        onClick={() => setZoom(Math.min(2, zoom + 0.1))}
+                        className="px-3 py-1 bg-gray-200 rounded-lg text-sm hover:bg-gray-300"
+                    >
+                        +
+                    </button>
+                    <button
+                        onClick={() => setZoom(1)}
+                        className="px-3 py-1 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700"
+                    >
+                        Reset
+                    </button>
+                </div>
+
+                {/* Filtros de tipo de materia */}
+                <div className="flex flex-wrap gap-2 mb-4">
+                    <button
+                        onClick={() => setFiltroTipo('todos')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filtroTipo === 'todos'
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                    >
+                        📚 Todas ({materias.length})
+                    </button>
+                    <button
+                        onClick={() => setFiltroTipo('criticas')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filtroTipo === 'criticas'
+                            ? 'bg-orange-600 text-white'
+                            : 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                            }`}
+                    >
+                        ⚠️ Críticas ({materiasCriticas.length})
+                    </button>
+                    <button
+                        onClick={() => setFiltroTipo('finales')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filtroTipo === 'finales'
+                            ? 'bg-red-600 text-white'
+                            : 'bg-red-100 text-red-700 hover:bg-red-200'
+                            }`}
+                    >
+                        🎯 Finales ({materiasFinales.length})
+                    </button>
+                    <button
+                        onClick={() => setFiltroTipo('iniciales')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${filtroTipo === 'iniciales'
+                            ? 'bg-green-600 text-white'
+                            : 'bg-green-100 text-green-700 hover:bg-green-200'
+                            }`}
+                    >
+                        🚀 Iniciales ({materiasIniciales.length})
+                    </button>
+                </div>
+
                 {/* Leyenda */}
-                <div className="flex flex-wrap gap-4 text-xs mt-4 pt-4 border-t">
+                <div className="flex flex-wrap gap-4 text-xs">
                     <div className="flex items-center gap-2">
                         <div className="w-4 h-4 bg-green-100 border-2 border-green-500 rounded-full"></div>
                         <span>Promoción</span>
@@ -1365,28 +1473,86 @@ function MapaCorrelativas({ materias }) {
 
                 {modoVista === 'manual' && (
                     <div className="mt-3 bg-purple-50 border border-purple-200 rounded-lg p-2 text-sm text-purple-700">
-                        💡 <strong>Modo Manual:</strong> Arrastra los nodos para reorganizar el mapa a tu gusto
+                        💡 <strong>Modo Manual:</strong> Arrastra los nodos para reorganizar el mapa
                     </div>
                 )}
             </div>
 
-            {/* Materias críticas */}
-            {materiasCriticas.length > 0 && (
+            {/* Información contextual según filtro */}
+            {filtroTipo === 'criticas' && materiasCriticas.length > 0 && (
                 <div className="bg-orange-50 border-2 border-orange-300 rounded-lg p-4">
                     <h3 className="font-bold text-orange-900 mb-3 flex items-center gap-2">
-                        ⚠️ Camino Crítico - Materias que Bloquean Otras
+                        ⚠️ Materias Críticas - Te Traban el Avance
                     </h3>
+                    <p className="text-sm text-orange-800 mb-3">
+                        Estas materias son "cuellos de botella": bloquean 2 o más materias futuras. ¡Priorizalas!
+                    </p>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        {materiasCriticas.slice(0, 3).map(materia => (
+                        {materiasCriticas.slice(0, 6).map(materia => (
                             <button
                                 key={materia.id}
-                                onClick={() => setDestacarMateria(materia)}
+                                onClick={() => {
+                                    setDestacarMateria(materia);
+                                    setFiltroTipo('todos');
+                                }}
                                 className={`${COLORES_ESTADO[materia.estado]} p-3 rounded-lg border-2 text-left hover:shadow-lg transition-all`}
                             >
                                 <div className="font-bold text-sm">{materia.nombre}</div>
-                                <div className="text-xs mt-1">
-                                    🔒 Bloquea <strong>{materia.dependientes}</strong> materia{materia.dependientes > 1 ? 's' : ''}
+                                <div className="text-xs mt-1 flex items-center gap-1">
+                                    <span>🔒 Bloquea</span>
+                                    <strong className="text-lg">{materia.dependientes}</strong>
+                                    <span>materia{materia.dependientes > 1 ? 's' : ''}</span>
                                 </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {filtroTipo === 'finales' && materiasFinales.length > 0 && (
+                <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
+                    <h3 className="font-bold text-red-900 mb-3 flex items-center gap-2">
+                        🎯 Materias Finales - No Habilitan Nada Más
+                    </h3>
+                    <p className="text-sm text-red-800 mb-3">
+                        Estas materias "mueren acá": no son correlativas de ninguna otra. Podés dejarlas para el final.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                        {materiasFinales.map(materia => (
+                            <button
+                                key={materia.id}
+                                onClick={() => {
+                                    setDestacarMateria(materia);
+                                    setFiltroTipo('todos');
+                                }}
+                                className={`${COLORES_ESTADO[materia.estado]} px-3 py-2 rounded-lg text-sm font-medium border-2 hover:shadow-lg transition-all`}
+                            >
+                                {materia.nombre}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {filtroTipo === 'iniciales' && materiasIniciales.length > 0 && (
+                <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4">
+                    <h3 className="font-bold text-green-900 mb-3 flex items-center gap-2">
+                        🚀 Materias Iniciales - Empezá Por Acá
+                    </h3>
+                    <p className="text-sm text-green-800 mb-3">
+                        Estas materias no tienen correlativas. ¡Son tu punto de partida!
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                        {materiasIniciales.map(materia => (
+                            <button
+                                key={materia.id}
+                                onClick={() => {
+                                    setDestacarMateria(materia);
+                                    setFiltroTipo('todos');
+                                }}
+                                className={`${COLORES_ESTADO[materia.estado]} px-3 py-2 rounded-lg text-sm font-medium border-2 hover:shadow-lg transition-all`}
+                            >
+                                {materia.nombre}
                             </button>
                         ))}
                     </div>
@@ -1398,7 +1564,7 @@ function MapaCorrelativas({ materias }) {
                 <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-indigo-300 rounded-lg p-4 shadow-xl">
                     <button
                         onClick={() => setDestacarMateria(null)}
-                        className="float-right text-indigo-600 hover:text-indigo-800 font-bold"
+                        className="float-right text-indigo-600 hover:text-indigo-800 font-bold text-xl"
                     >
                         ✕
                     </button>
@@ -1419,8 +1585,8 @@ function MapaCorrelativas({ materias }) {
                         <div>
                             {destacarMateria.correlativas && destacarMateria.correlativas.length > 0 ? (
                                 <>
-                                    <span className="font-medium text-indigo-800">⬅️ Requiere:</span>
-                                    <div className="mt-1 space-y-1">
+                                    <span className="font-medium text-indigo-800">⬅️ Requiere ({destacarMateria.correlativas.length}):</span>
+                                    <div className="mt-1 space-y-1 max-h-32 overflow-y-auto">
                                         {destacarMateria.correlativas.map(corrId => {
                                             const corr = materias.find(m => m.id === corrId);
                                             return corr ? (
@@ -1432,16 +1598,18 @@ function MapaCorrelativas({ materias }) {
                                     </div>
                                 </>
                             ) : (
-                                <div className="text-sm text-green-700">
-                                    ✅ Sin correlativas - ¡Puedes cursarla!
+                                <div className="text-sm text-green-700 font-bold">
+                                    ✅ Sin correlativas - ¡Puedes cursarla ya!
                                 </div>
                             )}
                         </div>
 
                         {getDependientes(destacarMateria.id).length > 0 && (
                             <div className="md:col-span-2 mt-2 pt-2 border-t border-indigo-200">
-                                <span className="font-medium text-indigo-800">➡️ Habilita:</span>
-                                <div className="mt-1 flex flex-wrap gap-1">
+                                <span className="font-medium text-indigo-800">
+                                    ➡️ Habilita ({getDependientes(destacarMateria.id).length}):
+                                </span>
+                                <div className="mt-1 flex flex-wrap gap-1 max-h-32 overflow-y-auto">
                                     {getDependientes(destacarMateria.id).map(dep => (
                                         <span key={dep.id} className={`text-xs px-2 py-1 rounded ${COLORES_ESTADO[dep.estado]}`}>
                                             {dep.nombre}
@@ -1450,166 +1618,234 @@ function MapaCorrelativas({ materias }) {
                                 </div>
                             </div>
                         )}
+
+                        {getDependientes(destacarMateria.id).length === 0 && (
+                            <div className="md:col-span-2 mt-2 pt-2 border-t border-indigo-200">
+                                <div className="text-sm text-red-700 font-bold">
+                                    🎯 MATERIA FINAL - No habilita ninguna otra
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
 
-            {/* Canvas interactivo */}
-            <div className="bg-white rounded-lg shadow-lg p-4 overflow-hidden">
+            {/* Canvas interactivo CON SCROLL */}
+            <div className="bg-white rounded-lg shadow-lg p-4">
+                <div className="mb-2 text-sm text-gray-600 flex items-center gap-2">
+                    <AlertCircle size={16} />
+                    <span>Usa scroll horizontal/vertical para navegar por todo el mapa</span>
+                </div>
                 <div
-                    ref={canvasRef}
-                    className="relative bg-gradient-to-br from-gray-50 to-blue-50 rounded-lg border-2 border-gray-200"
-                    style={{
-                        width: '100%',
-                        height: '800px',
-                        cursor: modoVista === 'manual' && arrastrandoNodo ? 'grabbing' : 'default'
-                    }}
-                    onMouseMove={handleMouseMove}
-                    onMouseUp={handleMouseUp}
-                    onMouseLeave={handleMouseUp}
+                    className="overflow-auto border-2 border-gray-200 rounded-lg"
+                    style={{ maxHeight: '600px' }}
                 >
-                    {/* SVG para las conexiones */}
-                    {mostrarConexiones && (
-                        <svg className="absolute inset-0 pointer-events-none" style={{ width: '100%', height: '100%' }}>
-                            <defs>
-                                <marker
-                                    id="arrowhead"
-                                    markerWidth="10"
-                                    markerHeight="10"
-                                    refX="9"
-                                    refY="3"
-                                    orient="auto"
-                                >
-                                    <polygon points="0 0, 10 3, 0 6" fill="#6366f1" />
-                                </marker>
-                            </defs>
-                            {nodos.map(nodo => {
-                                if (!nodo.materia.correlativas) return null;
-                                return nodo.materia.correlativas.map(corrId => {
-                                    const nodoOrigen = getNodoById(corrId);
-                                    if (!nodoOrigen) return null;
-
-                                    const esDestacada = destacarMateria &&
-                                        (destacarMateria.id === nodo.id || destacarMateria.id === corrId);
-
-                                    return (
-                                        <g key={`${corrId}-${nodo.id}`}>
-                                            <line
-                                                x1={nodoOrigen.x + 80}
-                                                y1={nodoOrigen.y + 40}
-                                                x2={nodo.x}
-                                                y2={nodo.y + 40}
-                                                stroke={esDestacada ? '#6366f1' : '#cbd5e1'}
-                                                strokeWidth={esDestacada ? 3 : 2}
-                                                markerEnd="url(#arrowhead)"
-                                                className="transition-all duration-300"
-                                            />
-                                        </g>
-                                    );
-                                });
-                            })}
-                        </svg>
-                    )}
-
-                    {/* Nodos flotantes */}
-                    {nodos.map(nodo => {
-                        const esDestacada = destacarMateria?.id === nodo.id;
-                        const estaConectada = destacarMateria && (
-                            destacarMateria.correlativas?.includes(nodo.id) ||
-                            getDependientes(destacarMateria.id).some(d => d.id === nodo.id)
-                        );
-
-                        return (
-                            <div
-                                key={nodo.id}
-                                className={`absolute transition-all duration-300 ${modoVista === 'manual' ? 'cursor-grab active:cursor-grabbing' : ''
-                                    } ${esDestacada ? 'z-50 scale-110' : estaConectada ? 'z-40 scale-105' : 'z-30'
-                                    }`}
-                                style={{
-                                    left: `${nodo.x}px`,
-                                    top: `${nodo.y}px`,
-                                    width: '160px'
-                                }}
-                                onMouseDown={(e) => handleMouseDown(e, nodo.id)}
+                    <div
+                        ref={canvasRef}
+                        className="relative bg-gradient-to-br from-gray-50 to-blue-50"
+                        style={{
+                            width: `${dimensionesCanvas.width * zoom}px`,
+                            height: `${dimensionesCanvas.height * zoom}px`,
+                            cursor: modoVista === 'manual' && arrastrandoNodo ? 'grabbing' : 'default',
+                            minWidth: '100%'
+                        }}
+                        onMouseMove={handleMouseMove}
+                        onMouseUp={handleMouseUp}
+                        onMouseLeave={handleMouseUp}
+                    >
+                        {/* SVG para las conexiones */}
+                        {mostrarConexiones && (
+                            <svg
+                                className="absolute inset-0 pointer-events-none"
+                                style={{ width: '100%', height: '100%' }}
                             >
-                                <button
-                                    onClick={() => setDestacarMateria(nodo.materia)}
-                                    className={`w-full p-3 rounded-xl border-3 shadow-lg hover:shadow-2xl transition-all ${COLORES_ESTADO[nodo.materia.estado]
-                                        } ${esDestacada ? 'ring-4 ring-indigo-400 border-indigo-500' : ''
-                                        } ${estaConectada && !esDestacada ? 'ring-2 ring-purple-300' : ''
+                                <defs>
+                                    <marker
+                                        id="arrowhead"
+                                        markerWidth="10"
+                                        markerHeight="10"
+                                        refX="9"
+                                        refY="3"
+                                        orient="auto"
+                                    >
+                                        <polygon points="0 0, 10 3, 0 6" fill="#6366f1" />
+                                    </marker>
+                                    <marker
+                                        id="arrowhead-critical"
+                                        markerWidth="10"
+                                        markerHeight="10"
+                                        refX="9"
+                                        refY="3"
+                                        orient="auto"
+                                    >
+                                        <polygon points="0 0, 10 3, 0 6" fill="#f97316" />
+                                    </marker>
+                                </defs>
+                                {nodosFiltrados.map(nodo => {
+                                    if (!nodo.materia.correlativas) return null;
+                                    return nodo.materia.correlativas.map(corrId => {
+                                        const nodoOrigen = getNodoById(corrId);
+                                        if (!nodoOrigen) return null;
+                                        if (filtroTipo !== 'todos' && !nodosFiltrados.find(n => n.id === corrId)) return null;
+
+                                        const esDestacada = destacarMateria &&
+                                            (destacarMateria.id === nodo.id || destacarMateria.id === corrId);
+
+                                        const esCritica = materiasCriticas.some(m => m.id === nodoOrigen.id);
+
+                                        return (
+                                            <g key={`${corrId}-${nodo.id}`}>
+                                                <line
+                                                    x1={(nodoOrigen.x + 80) * zoom}
+                                                    y1={(nodoOrigen.y + 40) * zoom}
+                                                    x2={nodo.x * zoom}
+                                                    y2={(nodo.y + 40) * zoom}
+                                                    stroke={esDestacada ? '#6366f1' : esCritica ? '#f97316' : '#cbd5e1'}
+                                                    strokeWidth={esDestacada ? 3 * zoom : esCritica ? 2.5 * zoom : 2 * zoom}
+                                                    markerEnd={esCritica ? "url(#arrowhead-critical)" : "url(#arrowhead)"}
+                                                    className="transition-all duration-300"
+                                                />
+                                            </g>
+                                        );
+                                    });
+                                })}
+                            </svg>
+                        )}
+
+                        {/* Nodos flotantes */}
+                        {nodosFiltrados.map(nodo => {
+                            const esDestacada = destacarMateria?.id === nodo.id;
+                            const estaConectada = destacarMateria && (
+                                destacarMateria.correlativas?.includes(nodo.id) ||
+                                getDependientes(destacarMateria.id).some(d => d.id === nodo.id)
+                            );
+                            const esCritica = materiasCriticas.some(m => m.id === nodo.id);
+                            const esFinal = materiasFinales.some(m => m.id === nodo.id);
+                            const esInicial = materiasIniciales.some(m => m.id === nodo.id);
+
+                            return (
+                                <div
+                                    key={nodo.id}
+                                    className={`absolute transition-all duration-300 ${modoVista === 'manual' ? 'cursor-grab active:cursor-grabbing' : ''
+                                        } ${esDestacada ? 'z-50 scale-110' : estaConectada ? 'z-40 scale-105' : 'z-30'
                                         }`}
+                                    style={{
+                                        left: `${nodo.x * zoom}px`,
+                                        top: `${nodo.y * zoom}px`,
+                                        width: `${160 * zoom}px`,
+                                        transform: zoom !== 1 ? `scale(${1})` : 'none',
+                                        transformOrigin: 'top left'
+                                    }}
+                                    onMouseDown={(e) => handleMouseDown(e, nodo.id)}
                                 >
-                                    <div className="font-bold text-xs leading-tight mb-1">
-                                        {nodo.materia.nombre}
-                                    </div>
-                                    <div className="text-[10px] opacity-75">
-                                        {nodo.materia.anio}° • C{nodo.materia.cuatrimestre}
-                                    </div>
-                                    {nodo.materia.correlativas && nodo.materia.correlativas.length > 0 && (
-                                        <div className="text-[10px] mt-1 font-medium">
-                                            🔗 {nodo.materia.correlativas.length}
+                                    <button
+                                        onClick={() => setDestacarMateria(nodo.materia)}
+                                        className={`w-full p-3 rounded-xl border-3 shadow-lg hover:shadow-2xl transition-all relative ${COLORES_ESTADO[nodo.materia.estado]
+                                            } ${esDestacada ? 'ring-4 ring-indigo-400 border-indigo-500' : ''
+                                            } ${estaConectada && !esDestacada ? 'ring-2 ring-purple-300' : ''
+                                            } ${esCritica && !esDestacada ? 'ring-2 ring-orange-400' : ''
+                                            }`}
+                                    >
+                                        {/* Badges de tipo */}
+                                        <div className="absolute -top-2 -right-2 flex gap-1">
+                                            {esCritica && (
+                                                <span className="bg-orange-500 text-white text-[8px] px-1.5 py-0.5 rounded-full font-bold">
+                                                    ⚠️
+                                                </span>
+                                            )}
+                                            {esFinal && (
+                                                <span className="bg-red-500 text-white text-[8px] px-1.5 py-0.5 rounded-full font-bold">
+                                                    🎯
+                                                </span>
+                                            )}
+                                            {esInicial && (
+                                                <span className="bg-green-500 text-white text-[8px] px-1.5 py-0.5 rounded-full font-bold">
+                                                    🚀
+                                                </span>
+                                            )}
                                         </div>
-                                    )}
-                                    {getDependientes(nodo.materia.id).length > 0 && (
-                                        <div className="text-[10px] mt-1 font-medium">
-                                            🔒 {getDependientes(nodo.materia.id).length}
-                                        </div>
-                                    )}
-                                </button>
-                            </div>
-                        );
-                    })}
 
-                    {/* Indicadores de año en el fondo */}
-                    <div className="absolute inset-0 pointer-events-none">
-                        {[1, 2, 3, 4, 5].map(anio => (
-                            <div
-                                key={anio}
-                                className="absolute text-6xl font-bold opacity-5 text-gray-400"
-                                style={{
-                                    left: `${60 + (anio - 1) * 200}px`,
-                                    top: '50%',
-                                    transform: 'translateY(-50%)'
-                                }}
-                            >
-                                {anio}°
-                            </div>
-                        ))}
+                                        <div className="font-bold text-xs leading-tight mb-1">
+                                            {nodo.materia.nombre}
+                                        </div>
+                                        <div className="text-[10px] opacity-75">
+                                            {nodo.materia.anio}° • C{nodo.materia.cuatrimestre}
+                                        </div>
+                                        <div className="flex justify-between items-center mt-2">
+                                            {nodo.materia.correlativas && nodo.materia.correlativas.length > 0 && (
+                                                <div className="text-[10px] font-medium flex items-center gap-1">
+                                                    <span>⬅️</span>
+                                                    <span>{nodo.materia.correlativas.length}</span>
+                                                </div>
+                                            )}
+                                            {getDependientes(nodo.materia.id).length > 0 && (
+                                                <div className="text-[10px] font-medium flex items-center gap-1">
+                                                    <span>➡️</span>
+                                                    <span>{getDependientes(nodo.materia.id).length}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </button>
+                                </div>
+                            );
+                        })}
+
+                        {/* Indicadores de año en el fondo */}
+                        <div className="absolute inset-0 pointer-events-none">
+                            {[1, 2, 3, 4, 5].map(anio => (
+                                <div
+                                    key={anio}
+                                    className="absolute text-6xl font-bold opacity-5 text-gray-400"
+                                    style={{
+                                        left: `${(60 + (anio - 1) * 400) * zoom}px`,
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        fontSize: `${60 * zoom}px`
+                                    }}
+                                >
+                                    {anio}°
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* Estadísticas */}
+            {/* Estadísticas mejoradas */}
             <div className="bg-white rounded-lg shadow-lg p-4">
-                <h3 className="font-bold text-gray-800 mb-3">📊 Análisis del Mapa</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-blue-50 rounded-lg p-3 text-center">
-                        <div className="text-3xl font-bold text-blue-700">
-                            {materias.filter(m => !m.correlativas || m.correlativas.length === 0).length}
-                        </div>
-                        <div className="text-xs text-blue-600 mt-1">Sin correlativas</div>
-                        <div className="text-[10px] text-blue-500 mt-1">¡Puedes cursarlas ya!</div>
+                <h3 className="font-bold text-gray-800 mb-3">📊 Análisis Completo del Mapa</h3>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div className="bg-blue-50 rounded-lg p-3 text-center cursor-pointer hover:bg-blue-100 transition"
+                        onClick={() => setFiltroTipo('iniciales')}>
+                        <div className="text-3xl font-bold text-blue-700">{materiasIniciales.length}</div>
+                        <div className="text-xs text-blue-600 mt-1">🚀 Iniciales</div>
+                        <div className="text-[10px] text-blue-500 mt-1">Sin correlativas</div>
                     </div>
-                    <div className="bg-orange-50 rounded-lg p-3 text-center">
-                        <div className="text-3xl font-bold text-orange-700">
-                            {materiasCriticas.length}
-                        </div>
-                        <div className="text-xs text-orange-600 mt-1">Críticas</div>
-                        <div className="text-[10px] text-orange-500 mt-1">Priorizalas</div>
+                    <div className="bg-orange-50 rounded-lg p-3 text-center cursor-pointer hover:bg-orange-100 transition"
+                        onClick={() => setFiltroTipo('criticas')}>
+                        <div className="text-3xl font-bold text-orange-700">{materiasCriticas.length}</div>
+                        <div className="text-xs text-orange-600 mt-1">⚠️ Críticas</div>
+                        <div className="text-[10px] text-orange-500 mt-1">Te traban</div>
+                    </div>
+                    <div className="bg-red-50 rounded-lg p-3 text-center cursor-pointer hover:bg-red-100 transition"
+                        onClick={() => setFiltroTipo('finales')}>
+                        <div className="text-3xl font-bold text-red-700">{materiasFinales.length}</div>
+                        <div className="text-xs text-red-600 mt-1">🎯 Finales</div>
+                        <div className="text-[10px] text-red-500 mt-1">Mueren ahí</div>
                     </div>
                     <div className="bg-purple-50 rounded-lg p-3 text-center">
                         <div className="text-3xl font-bold text-purple-700">
                             {materias.reduce((max, m) => Math.max(max, m.correlativas?.length || 0), 0)}
                         </div>
                         <div className="text-xs text-purple-600 mt-1">Máx. requisitos</div>
-                        <div className="text-[10px] text-purple-500 mt-1">Materia más compleja</div>
+                        <div className="text-[10px] text-purple-500 mt-1">Más compleja</div>
                     </div>
                     <div className="bg-green-50 rounded-lg p-3 text-center">
                         <div className="text-3xl font-bold text-green-700">
                             {materias.reduce((sum, m) => sum + (m.correlativas?.length || 0), 0)}
                         </div>
-                        <div className="text-xs text-green-600 mt-1">Conexiones totales</div>
-                        <div className="text-[10px] text-green-500 mt-1">Red de dependencias</div>
+                        <div className="text-xs text-green-600 mt-1">Conexiones</div>
+                        <div className="text-[10px] text-green-500 mt-1">Red total</div>
                     </div>
                 </div>
             </div>
